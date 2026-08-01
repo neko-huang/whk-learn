@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
+import 'package:drift/drift.dart';
 import '../../models/database.dart';
 import '../../services/database_service.dart';
 
@@ -460,7 +461,6 @@ class _DailyScheduleScreenState extends ConsumerState<DailyScheduleScreen>
   }
 
   Widget _buildActualCard(DailySchedule schedule, int index) {
-    final color = _getColorForIndex(index);
     final isDone = schedule.isCompleted;
     final theme = Theme.of(context);
 

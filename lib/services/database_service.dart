@@ -579,7 +579,6 @@ class DatabaseService {
 
   /// 获取学习计划带科目信息
   static Future<List<Map<String, dynamic>>> getStudyPlansWithSubject() async {
-    final db = await database;
     final plans = await getAllStudyPlans();
     final subjects = await getAllSubjects();
     final subjectMap = {for (var s in subjects) s.id: s};
@@ -631,14 +630,12 @@ class DatabaseService {
 
   /// 获取今日已完成番茄钟数量（focus + focus_mode 类型）
   static Future<int> getTodayPomodoroCount() async {
-    final db = await database;
     final records = await getTodayPomodoroRecords();
     return records.where((r) => (r.type == 'focus' || r.type == 'focus_mode') && r.completed).length;
   }
 
   /// 获取今日学习时长（分钟，从 pomodoro_records 计算，包含 focus + focus_mode）
   static Future<int> getTodayStudyMinutes() async {
-    final db = await database;
     final records = await getTodayPomodoroRecords();
     final totalMinutes = records
         .where((r) => (r.type == 'focus' || r.type == 'focus_mode') && r.completed)

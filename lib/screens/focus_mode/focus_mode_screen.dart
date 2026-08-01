@@ -95,7 +95,7 @@ class FocusModeEntryScreen extends ConsumerWidget {
     if (minutes >= 60) {
       final h = minutes ~/ 60;
       final m = minutes % 60;
-      label = m > 0 ? '${h}小时${m}分钟' : '${h}小时';
+      label = m > 0 ? '$h小时$m分钟' : '$h小时';
     } else {
       label = '$minutes 分钟';
     }
@@ -163,6 +163,7 @@ class _FocusModeScreenState extends ConsumerState<FocusModeScreen> {
   int _remainingSeconds = 0;
   Timer? _timer;
   bool _isCompleted = false;
+  // ignore: unused_field
   bool _isRunning = false;
   late String _encouragement;
   DateTime? _startTime;
