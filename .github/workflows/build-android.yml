@@ -28,12 +28,14 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Install Android SDK Platform 35
+      - name: Fix Android SDK Platform 35
         run: |
-          set +e
-          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
-          echo "y" | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-34" "build-tools;34.0.0"
-          ls -la $ANDROID_HOME/platforms/ || echo "Platforms directory not found"
+          echo "Removing corrupted android-35 directory..."
+          rm -rf $ANDROID_HOME/platforms/android-35
+          echo "Reinstalling android-35..."
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-35" "build-tools;35.0.0"
+          echo "Verifying installation..."
+          ls -lh $ANDROID_HOME/platforms/android-35/ || echo "Installation failed"
 
       - name: Get dependencies
         run: flutter pub get
