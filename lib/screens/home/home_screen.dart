@@ -225,6 +225,32 @@ class HomeScreen extends ConsumerWidget {
             ),
           ],
         ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _buildActionButton(
+                context,
+                icon: Icons.phone_android,
+                label: '离开手机',
+                onTap: () => context.push('/focus-mode'),
+                color: Colors.deepPurple,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildActionButton(
+                context,
+                icon: Icons.event_note,
+                label: '日程',
+                onTap: () => context.go('/daily-schedule'),
+                color: Colors.brown,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(child: SizedBox()),
+          ],
+        ),
       ],
     );
   }

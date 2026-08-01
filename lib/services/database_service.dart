@@ -3,6 +3,7 @@ import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/database.dart';
 import '../models/mistake.dart';
 
@@ -628,28 +629,30 @@ class DatabaseService {
     ).get();
   }
 
-  /// 获取今日已完成番茄钟数量（仅 focus 类型）
+  /// 获取今日已完成番茄钟数量（focus + focus_mode 类型）
   static Future<int> getTodayPomodoroCount() async {
     final db = await database;
     final records = await getTodayPomodoroRecords();
-    return records.where((r) => r.type == 'focus' && r.completed).length;
+    return records.where((r) => (r.type == 'focus' || r.type == 'focus_mode') && r.completed).length;
   }
 
-  /// 获取今日学习时长（分钟，从 pomodoro_records 计算）
+  /// 获取今日学习时长（分钟，从 pomodoro_records 计算，包含 focus + focus_mode）
   static Future<int> getTodayStudyMinutes() async {
     final db = await database;
     final records = await getTodayPomodoroRecords();
     final totalMinutes = records
-        .where((r) => r.type == 'focus' && r.completed)
+        .where((r) => (r.type == 'focus' || r.type == 'focus_mode') && r.completed)
         .fold<int>(0, (sum, r) => sum + r.duration);
     return totalMinutes;
   }
 
-  /// 获取各科目学习时长分布（从 pomodoro_records 按科目统计）
+  /// 获取各科目学习时长分布（从 pomodoro_records 按科目统计，包含 focus + focus_mode）
   static Future<Map<int, int>> getSubjectStudyDistribution() async {
     final db = await database;
     final records = await (db.select(db.pomodoroRecords)
-      ..where((t) => t.type.equals('focus') & t.completed.equals(true))
+      ..where((t) =>
+          (t.type.equals('focus') | t.type.equals('focus_mode')) &
+          t.completed.equals(true))
     ).get();
 
     Map<int, int> distribution = {};
@@ -661,11 +664,13 @@ class DatabaseService {
     return distribution;
   }
 
-  /// 获取连续打卡天数（从 pomodoro_records 计算连续有学习记录的天数）
+  /// 获取连续打卡天数（从 pomodoro_records 计算连续有学习记录的天数，包含 focus + focus_mode）
   static Future<int> getStudyStreak() async {
     final db = await database;
     final records = await (db.select(db.pomodoroRecords)
-      ..where((t) => t.type.equals('focus') & t.completed.equals(true))
+      ..where((t) =>
+          (t.type.equals('focus') | t.type.equals('focus_mode')) &
+          t.completed.equals(true))
       ..orderBy([(t) => OrderingTerm.desc(t.startTime)])
     ).get();
 
@@ -728,7 +733,7 @@ class DatabaseService {
       final records = await (db.select(db.pomodoroRecords)
         ..where((t) => t.startTime.isBiggerOrEqualValue(dayStart) & 
                        t.startTime.isSmallerThanValue(dayEnd) & 
-                       t.type.equals('focus') & 
+                       (t.type.equals('focus') | t.type.equals('focus_mode')) & 
                        t.completed.equals(true))
       ).get();
 
@@ -737,5 +742,122 @@ class DatabaseService {
     }
 
     return dailyMinutes;
+  }
+
+  // ==================== 每日时间安排相关操作 ====================
+
+  /// 获取指定日期的安排（按时间排序）
+  static Future<List<DailySchedule>> getDailySchedulesByDate(DateTime date) async {
+    final db = await database;
+    final normalizedDate = DateTime(date.year, date.month, date.day);
+    return await (db.select(db.dailySchedules)
+      ..where((t) => t.date.equals(normalizedDate))
+      ..orderBy([(t) => OrderingTerm.asc(t.sortOrder), (t) => OrderingTerm.asc(t.startTime)])
+    ).get();
+  }
+
+  /// 添加安排项
+  static Future<int> addDailySchedule({
+    required DateTime date,
+    required String startTime,
+    required String endTime,
+    required String title,
+    String note = '',
+    int sortOrder = 0,
+  }) async {
+    final db = await database;
+    final normalizedDate = DateTime(date.year, date.month, date.day);
+    return await db.into(db.dailySchedules).insert(
+      DailySchedulesCompanion.insert(
+        date: normalizedDate,
+        startTime: startTime,
+        endTime: endTime,
+        title: title,
+        note: Value(note),
+        sortOrder: Value(sortOrder),
+      ),
+    );
+  }
+
+  /// 更新安排项
+  static Future<bool> updateDailySchedule(int id, {
+    String? startTime,
+    String? endTime,
+    String? title,
+    String? note,
+    int? sortOrder,
+  }) async {
+    final db = await database;
+    return await (db.update(db.dailySchedules)..where((t) => t.id.equals(id))).write(
+      DailySchedulesCompanion(
+        startTime: startTime != null ? Value(startTime) : const Value.absent(),
+        endTime: endTime != null ? Value(endTime) : const Value.absent(),
+        title: title != null ? Value(title) : const Value.absent(),
+        note: note != null ? Value(note) : const Value.absent(),
+        sortOrder: sortOrder != null ? Value(sortOrder) : const Value.absent(),
+      ),
+    ) > 0;
+  }
+
+  /// 删除安排项
+  static Future<bool> deleteDailySchedule(int id) async {
+    final db = await database;
+    return await (db.delete(db.dailySchedules)..where((t) => t.id.equals(id))).go() > 0;
+  }
+
+  /// 检查是否需要归档（当前日期与上次活跃日期不同时触发）
+  /// 保留旧数据不做删除，仅更新 lastActiveDate
+  static Future<void> archiveAndResetIfNeeded() async {
+    final prefs = await SharedPreferences.getInstance();
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final lastActiveStr = prefs.getString('lastActiveDate');
+
+    if (lastActiveStr != null) {
+      final lastActive = DateTime.tryParse(lastActiveStr);
+      if (lastActive != null && _isSameDay(lastActive, today)) {
+        return; // 同一天，无需归档
+      }
+    }
+
+    // 不同日期，更新 lastActiveDate（旧数据保留在数据库中，不删除）
+    await prefs.setString('lastActiveDate', today.toIso8601String());
+  }
+
+  /// 获取上次活跃日期
+  static Future<DateTime?> getLastActiveDate() async {
+    final prefs = await SharedPreferences.getInstance();
+    final lastActiveStr = prefs.getString('lastActiveDate');
+    if (lastActiveStr == null) return null;
+    return DateTime.tryParse(lastActiveStr);
+  }
+
+  /// 判断两个日期是否同一天
+  static bool _isSameDay(DateTime a, DateTime b) {
+    return a.year == b.year && a.month == b.month && a.day == b.day;
+  }
+
+  /// 获取今日专注模式完成次数
+  static Future<int> getTodayFocusModeCount() async {
+    final db = await database;
+    final now = DateTime.now();
+    final todayStart = DateTime(now.year, now.month, now.day);
+    final todayEnd = todayStart.add(const Duration(days: 1));
+
+    final records = await (db.select(db.pomodoroRecords)
+      ..where((t) => t.type.equals('focus_mode') &
+                     t.completed.equals(true) &
+                     t.startTime.isBiggerOrEqualValue(todayStart) &
+                     t.startTime.isSmallerThanValue(todayEnd))
+    ).get();
+    return records.length;
+  }
+
+  /// 获取今日日程数量
+  static Future<int> getTodayDailyScheduleCount() async {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final schedules = await getDailySchedulesByDate(today);
+    return schedules.length;
   }
 }

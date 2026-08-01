@@ -71,6 +71,9 @@ final statisticsProvider = FutureProvider<Map<String, dynamic>>((ref) async {
   // 最近7天每日学习时长（从番茄钟）
   final dailyStudyMinutes = await DatabaseService.getDailyStudyMinutes(7);
 
+  // 专注模式完成次数
+  final todayFocusModeCount = await DatabaseService.getTodayFocusModeCount();
+
   return {
     'subjects': subjects,
     'mistakesBySubject': mistakesBySubject,
@@ -86,6 +89,8 @@ final statisticsProvider = FutureProvider<Map<String, dynamic>>((ref) async {
     'studyStreak': studyStreak,
     'subjectStudyDistribution': subjectStudyDistribution,
     'dailyStudyMinutes': dailyStudyMinutes,
+    // 专注模式统计
+    'todayFocusModeCount': todayFocusModeCount,
   };
 });
 
@@ -157,6 +162,7 @@ class StatisticsScreen extends ConsumerWidget {
     final todayMinutes = data['todayStudyMinutes'] as int;
     final todayCount = data['todayPomodoroCount'] as int;
     final streak = data['studyStreak'] as int;
+    final focusModeCount = data['todayFocusModeCount'] as int;
 
     return Card(
       child: Padding(
@@ -183,6 +189,12 @@ class StatisticsScreen extends ConsumerWidget {
                   '$todayCount',
                   Colors.orange,
                   Icons.local_fire_department,
+                ),
+                _buildStudyStatColumn(
+                  '专注模式',
+                  '$focusModeCount',
+                  Colors.deepPurple,
+                  Icons.phone_android,
                 ),
                 _buildStudyStatColumn(
                   '连续打卡',

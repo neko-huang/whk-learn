@@ -86,16 +86,28 @@ class PomodoroRecords extends Table {
   DateTimeColumn get startTime => dateTime()();
   DateTimeColumn get endTime => dateTime()();
   IntColumn get duration => integer()(); // 持续时长（分钟）
-  TextColumn get type => text().withDefault(const Constant('focus'))(); // focus/short_break/long_break
+  TextColumn get type => text().withDefault(const Constant('focus'))(); // focus/short_break/long_break/focus_mode
   BoolColumn get completed => boolean().withDefault(const Constant(true))();
 }
 
-@DriftDatabase(tables: [Subjects, Mistakes, MistakeImages, StudyRecords, ReviewRecords, ClassSchedules, StudyPlans, PomodoroRecords])
+/// 每日时间安排表
+class DailySchedules extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  DateTimeColumn get date => dateTime()(); // 日期（只存年月日，时分秒为0）
+  TextColumn get startTime => text()(); // HH:mm 格式
+  TextColumn get endTime => text()(); // HH:mm 格式
+  TextColumn get title => text().withLength(min: 1, max: 100)();
+  TextColumn get note => text().withDefault(const Constant(''))(); // 备注
+  IntColumn get sortOrder => integer().withDefault(const Constant(0))();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+}
+
+@DriftDatabase(tables: [Subjects, Mistakes, MistakeImages, StudyRecords, ReviewRecords, ClassSchedules, StudyPlans, PomodoroRecords, DailySchedules])
 class AppDatabase extends _$AppDatabase {
   AppDatabase(QueryExecutor e) : super(e);
 
   @override
-  int get schemaVersion => 2;
+  int get schemaVersion => 3;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -108,6 +120,10 @@ class AppDatabase extends _$AppDatabase {
         await m.createTable(classSchedules);
         await m.createTable(studyPlans);
         await m.createTable(pomodoroRecords);
+      }
+      if (from < 3) {
+        // v2 -> v3: 添加每日时间安排表
+        await m.createTable(dailySchedules);
       }
     },
   );

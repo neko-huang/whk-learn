@@ -11,6 +11,8 @@ import 'screens/settings/settings_screen.dart';
 import 'screens/schedule/schedule_screen.dart';
 import 'screens/plans/plans_screen.dart';
 import 'screens/pomodoro/pomodoro_screen.dart';
+import 'screens/daily_schedule/daily_schedule_screen.dart';
+import 'screens/focus_mode/focus_mode_screen.dart';
 
 // ==================== 全局 Provider ====================
 
@@ -35,6 +37,7 @@ class MainScaffold extends ConsumerWidget {
     (icon: Icons.home, label: '首页'),
     (icon: Icons.warning_amber_rounded, label: '易错点'),
     (icon: Icons.calendar_today, label: '课程表'),
+    (icon: Icons.schedule, label: '日程'),
     (icon: Icons.assignment, label: '学习计划'),
   ];
 
@@ -101,7 +104,12 @@ final _shellRoutes = <RouteBase>[
     path: '/schedule',
     builder: (context, state) => const ScheduleScreen(),
   ),
-  // 分支 3: 学习计划
+  // 分支 3: 日程
+  GoRoute(
+    path: '/daily-schedule',
+    builder: (context, state) => const DailyScheduleScreen(),
+  ),
+  // 分支 4: 学习计划
   GoRoute(
     path: '/plans',
     builder: (context, state) => const PlansScreen(),
@@ -140,6 +148,10 @@ final routerProvider = Provider<GoRouter>((ref) {
             initialPlanId: planId != null ? int.tryParse(planId) : null,
           );
         },
+      ),
+      GoRoute(
+        path: '/focus-mode',
+        builder: (context, state) => const FocusModeEntryScreen(),
       ),
     ],
   );

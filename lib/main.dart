@@ -12,6 +12,9 @@ void main() async {
   // 初始化数据库
   await DatabaseService.database;
 
+  // 检查日程归档（跨天时标记旧数据为已归档）
+  await DatabaseService.archiveAndResetIfNeeded();
+
   // 初始化通知服务
   await NotificationService.initialize();
 
