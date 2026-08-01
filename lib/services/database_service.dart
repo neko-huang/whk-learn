@@ -418,4 +418,325 @@ class DatabaseService {
       'totalMistakes': await db.select(db.mistakes).get().then((l) => l.length),
     };
   }
+
+  // ==================== 课程表相关操作 ====================
+
+  /// 获取所有课程安排
+  static Future<List<ClassSchedule>> getAllSchedules() async {
+    final db = await database;
+    return await (db.select(db.classSchedules)
+      ..orderBy([(t) => OrderingTerm.asc(t.weekday)])
+    ).get();
+  }
+
+  /// 获取指定星期的课程安排
+  static Future<List<ClassSchedule>> getSchedulesByWeekday(int weekday) async {
+    final db = await database;
+    return await (db.select(db.classSchedules)
+      ..where((t) => t.weekday.equals(weekday))
+      ..orderBy([(t) => OrderingTerm.asc(t.startTime)])
+    ).get();
+  }
+
+  /// 添加课程安排
+  static Future<int> addSchedule({
+    required int subjectId,
+    required int weekday,
+    required String startTime,
+    required String endTime,
+    String location = '',
+    String? color,
+  }) async {
+    final db = await database;
+    return await db.into(db.classSchedules).insert(
+      ClassSchedulesCompanion.insert(
+        subjectId: subjectId,
+        weekday: weekday,
+        startTime: startTime,
+        endTime: endTime,
+        location: Value(location),
+        color: Value(color),
+      ),
+    );
+  }
+
+  /// 更新课程安排
+  static Future<bool> updateSchedule(int id, {
+    int? subjectId,
+    int? weekday,
+    String? startTime,
+    String? endTime,
+    String? location,
+    String? color,
+  }) async {
+    final db = await database;
+    return await (db.update(db.classSchedules)..where((t) => t.id.equals(id))).write(
+      ClassSchedulesCompanion(
+        subjectId: subjectId != null ? Value(subjectId) : const Value.absent(),
+        weekday: weekday != null ? Value(weekday) : const Value.absent(),
+        startTime: startTime != null ? Value(startTime) : const Value.absent(),
+        endTime: endTime != null ? Value(endTime) : const Value.absent(),
+        location: location != null ? Value(location) : const Value.absent(),
+        color: color != null ? Value(color) : const Value.absent(),
+      ),
+    ) > 0;
+  }
+
+  /// 删除课程安排
+  static Future<bool> deleteSchedule(int id) async {
+    final db = await database;
+    return await (db.delete(db.classSchedules)..where((t) => t.id.equals(id))).go() > 0;
+  }
+
+  /// 获取课程安排带科目信息
+  static Future<List<Map<String, dynamic>>> getSchedulesWithSubject() async {
+    final db = await database;
+    final schedules = await getAllSchedules();
+    final subjects = await getAllSubjects();
+    final subjectMap = {for (var s in subjects) s.id: s};
+
+    return schedules.map((s) => {
+      'schedule': s,
+      'subject': subjectMap[s.subjectId],
+    }).toList();
+  }
+
+  // ==================== 学习计划相关操作 ====================
+
+  /// 获取所有学习计划
+  static Future<List<StudyPlan>> getAllStudyPlans() async {
+    final db = await database;
+    return await (db.select(db.studyPlans)
+      ..orderBy([(t) => OrderingTerm.desc(t.createdAt)])
+    ).get();
+  }
+
+  /// 按状态获取学习计划
+  static Future<List<StudyPlan>> getStudyPlansByStatus(String status) async {
+    final db = await database;
+    return await (db.select(db.studyPlans)
+      ..where((t) => t.status.equals(status))
+      ..orderBy([(t) => OrderingTerm.desc(t.createdAt)])
+    ).get();
+  }
+
+  /// 添加学习计划
+  static Future<int> addStudyPlan({
+    required String title,
+    String description = '',
+    int? subjectId,
+    required DateTime startDate,
+    required DateTime endDate,
+    int targetHours = 0,
+    String status = 'pending',
+  }) async {
+    final db = await database;
+    return await db.into(db.studyPlans).insert(
+      StudyPlansCompanion.insert(
+        title: title,
+        description: Value(description),
+        subjectId: subjectId != null ? Value(subjectId) : const Value.absentNull(),
+        startDate: startDate,
+        endDate: endDate,
+        targetHours: Value(targetHours),
+        completedHours: const Value(0),
+        status: Value(status),
+      ),
+    );
+  }
+
+  /// 更新学习计划
+  static Future<bool> updateStudyPlan(int id, {
+    String? title,
+    String? description,
+    int? subjectId,
+    DateTime? startDate,
+    DateTime? endDate,
+    int? targetHours,
+    int? completedHours,
+    String? status,
+  }) async {
+    final db = await database;
+    return await (db.update(db.studyPlans)..where((t) => t.id.equals(id))).write(
+      StudyPlansCompanion(
+        title: title != null ? Value(title) : const Value.absent(),
+        description: description != null ? Value(description) : const Value.absent(),
+        subjectId: subjectId != null ? Value(subjectId) : const Value.absent(),
+        startDate: startDate != null ? Value(startDate) : const Value.absent(),
+        endDate: endDate != null ? Value(endDate) : const Value.absent(),
+        targetHours: targetHours != null ? Value(targetHours) : const Value.absent(),
+        completedHours: completedHours != null ? Value(completedHours) : const Value.absent(),
+        status: status != null ? Value(status) : const Value.absent(),
+      ),
+    ) > 0;
+  }
+
+  /// 删除学习计划
+  static Future<bool> deleteStudyPlan(int id) async {
+    final db = await database;
+    return await (db.delete(db.studyPlans)..where((t) => t.id.equals(id))).go() > 0;
+  }
+
+  /// 获取学习计划带科目信息
+  static Future<List<Map<String, dynamic>>> getStudyPlansWithSubject() async {
+    final db = await database;
+    final plans = await getAllStudyPlans();
+    final subjects = await getAllSubjects();
+    final subjectMap = {for (var s in subjects) s.id: s};
+
+    return plans.map((p) => {
+      'plan': p,
+      'subject': p.subjectId != null ? subjectMap[p.subjectId] : null,
+    }).toList();
+  }
+
+  // ==================== 番茄钟相关操作 ====================
+
+  /// 添加番茄钟记录
+  static Future<int> addPomodoroRecord({
+    int? subjectId,
+    int? planId,
+    required DateTime startTime,
+    required DateTime endTime,
+    required int duration,
+    String type = 'focus',
+    bool completed = true,
+  }) async {
+    final db = await database;
+    return await db.into(db.pomodoroRecords).insert(
+      PomodoroRecordsCompanion.insert(
+        subjectId: subjectId != null ? Value(subjectId) : const Value.absentNull(),
+        planId: planId != null ? Value(planId) : const Value.absentNull(),
+        startTime: startTime,
+        endTime: endTime,
+        duration: duration,
+        type: Value(type),
+        completed: Value(completed),
+      ),
+    );
+  }
+
+  /// 获取今日番茄钟记录
+  static Future<List<PomodoroRecord>> getTodayPomodoroRecords() async {
+    final db = await database;
+    final today = DateTime.now();
+    final todayStart = DateTime(today.year, today.month, today.day);
+    final todayEnd = todayStart.add(const Duration(days: 1));
+
+    return await (db.select(db.pomodoroRecords)
+      ..where((t) => t.startTime.isBiggerOrEqualValue(todayStart) & t.startTime.isSmallerThanValue(todayEnd))
+      ..orderBy([(t) => OrderingTerm.desc(t.startTime)])
+    ).get();
+  }
+
+  /// 获取今日已完成番茄钟数量（仅 focus 类型）
+  static Future<int> getTodayPomodoroCount() async {
+    final db = await database;
+    final records = await getTodayPomodoroRecords();
+    return records.where((r) => r.type == 'focus' && r.completed).length;
+  }
+
+  /// 获取今日学习时长（分钟，从 pomodoro_records 计算）
+  static Future<int> getTodayStudyMinutes() async {
+    final db = await database;
+    final records = await getTodayPomodoroRecords();
+    final totalMinutes = records
+        .where((r) => r.type == 'focus' && r.completed)
+        .fold<int>(0, (sum, r) => sum + r.duration);
+    return totalMinutes;
+  }
+
+  /// 获取各科目学习时长分布（从 pomodoro_records 按科目统计）
+  static Future<Map<int, int>> getSubjectStudyDistribution() async {
+    final db = await database;
+    final records = await (db.select(db.pomodoroRecords)
+      ..where((t) => t.type.equals('focus') & t.completed.equals(true))
+    ).get();
+
+    Map<int, int> distribution = {};
+    for (final record in records) {
+      if (record.subjectId != null) {
+        distribution[record.subjectId!] = (distribution[record.subjectId!] ?? 0) + record.duration;
+      }
+    }
+    return distribution;
+  }
+
+  /// 获取连续打卡天数（从 pomodoro_records 计算连续有学习记录的天数）
+  static Future<int> getStudyStreak() async {
+    final db = await database;
+    final records = await (db.select(db.pomodoroRecords)
+      ..where((t) => t.type.equals('focus') & t.completed.equals(true))
+      ..orderBy([(t) => OrderingTerm.desc(t.startTime)])
+    ).get();
+
+    if (records.isEmpty) return 0;
+
+    // 提取所有有学习记录的日期（去重）
+    final studyDates = <DateTime>{};
+    for (final record in records) {
+      studyDates.add(DateTime(record.startTime.year, record.startTime.month, record.startTime.day));
+    }
+
+    // 从昨天或今天开始计算连续天数
+    final now = DateTime.now();
+    var checkDate = DateTime(now.year, now.month, now.day);
+    
+    // 如果今天没有记录，从昨天开始检查
+    if (!studyDates.contains(checkDate)) {
+      checkDate = checkDate.subtract(const Duration(days: 1));
+      if (!studyDates.contains(checkDate)) return 0;
+    }
+
+    int streak = 0;
+    while (studyDates.contains(checkDate)) {
+      streak++;
+      checkDate = checkDate.subtract(const Duration(days: 1));
+    }
+
+    return streak;
+  }
+
+  /// 获取指定学习计划的番茄钟记录
+  static Future<List<PomodoroRecord>> getPomodoroRecordsByPlan(int planId) async {
+    final db = await database;
+    return await (db.select(db.pomodoroRecords)
+      ..where((t) => t.planId.equals(planId))
+      ..orderBy([(t) => OrderingTerm.desc(t.startTime)])
+    ).get();
+  }
+
+  /// 获取某学习计划已完成的学习时长（分钟）
+  static Future<int> getPlanCompletedMinutes(int planId) async {
+    final db = await database;
+    final records = await (db.select(db.pomodoroRecords)
+      ..where((t) => t.planId.equals(planId) & t.type.equals('focus') & t.completed.equals(true))
+    ).get();
+    return records.fold<int>(0, (sum, r) => sum + r.duration);
+  }
+
+  /// 获取最近7天每日学习时长
+  static Future<List<MapEntry<DateTime, int>>> getDailyStudyMinutes(int days) async {
+    final db = await database;
+    final now = DateTime.now();
+    final List<MapEntry<DateTime, int>> dailyMinutes = [];
+
+    for (int i = days - 1; i >= 0; i--) {
+      final date = now.subtract(Duration(days: i));
+      final dayStart = DateTime(date.year, date.month, date.day);
+      final dayEnd = dayStart.add(const Duration(days: 1));
+
+      final records = await (db.select(db.pomodoroRecords)
+        ..where((t) => t.startTime.isBiggerOrEqualValue(dayStart) & 
+                       t.startTime.isSmallerThanValue(dayEnd) & 
+                       t.type.equals('focus') & 
+                       t.completed.equals(true))
+      ).get();
+
+      final totalMinutes = records.fold<int>(0, (sum, r) => sum + r.duration);
+      dailyMinutes.add(MapEntry(dayStart, totalMinutes));
+    }
+
+    return dailyMinutes;
+  }
 }

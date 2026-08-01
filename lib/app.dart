@@ -8,6 +8,9 @@ import 'screens/mistakes/add_mistake_screen.dart';
 import 'screens/mistakes/mistake_detail_screen.dart';
 import 'screens/statistics/statistics_screen.dart';
 import 'screens/settings/settings_screen.dart';
+import 'screens/schedule/schedule_screen.dart';
+import 'screens/plans/plans_screen.dart';
+import 'screens/pomodoro/pomodoro_screen.dart';
 
 // ==================== 全局 Provider ====================
 
@@ -17,22 +20,66 @@ final isDarkModeProvider = StateProvider<bool>((ref) => false);
 /// 学段选择
 final stageProvider = StateProvider<String>((ref) => 'high_school');
 
+/// 底部导航栏索引
+final bottomNavIndexProvider = StateProvider<int>((ref) => 0);
+
+// ==================== 底部导航 Shell ====================
+
+/// 带底部导航栏的主框架
+class MainScaffold extends ConsumerWidget {
+  final StatefulNavigationShell navigationShell;
+
+  const MainScaffold({super.key, required this.navigationShell});
+
+  static const _navItems = [
+    (icon: Icons.home, label: '首页'),
+    (icon: Icons.warning_amber_rounded, label: '易错点'),
+    (icon: Icons.calendar_today, label: '课程表'),
+    (icon: Icons.assignment, label: '学习计划'),
+  ];
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final currentIndex = ref.watch(bottomNavIndexProvider);
+
+    return Scaffold(
+      body: navigationShell,
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: currentIndex,
+        onTap: (index) {
+          ref.read(bottomNavIndexProvider.notifier).state = index;
+          navigationShell.goBranch(
+            index,
+            initialLocation: index == currentIndex,
+          );
+        },
+        items: _navItems.map((item) {
+          return BottomNavigationBarItem(
+            icon: Icon(item.icon),
+            label: item.label,
+          );
+        }).toList(),
+      ),
+    );
+  }
+}
+
 // ==================== 路由配置 ====================
 
-final routerProvider = Provider<GoRouter>((ref) {
-  return GoRouter(
-    initialLocation: '/',
+/// 底部导航栏各分支的路由
+final _shellRoutes = <RouteBase>[
+  // 分支 0: 首页
+  GoRoute(
+    path: '/',
+    builder: (context, state) => const HomeScreen(),
+  ),
+  // 分支 1: 易错点
+  GoRoute(
+    path: '/mistakes',
+    builder: (context, state) => const MistakeListScreen(),
     routes: [
       GoRoute(
-        path: '/',
-        builder: (context, state) => const HomeScreen(),
-      ),
-      GoRoute(
-        path: '/mistakes',
-        builder: (context, state) => const MistakeListScreen(),
-      ),
-      GoRoute(
-        path: '/mistakes/add',
+        path: 'add',
         builder: (context, state) {
           final subjectId = state.uri.queryParameters['subjectId'];
           return AddMistakeScreen(
@@ -41,12 +88,40 @@ final routerProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
-        path: '/mistakes/:id',
+        path: ':id',
         builder: (context, state) {
           final id = int.parse(state.pathParameters['id']!);
           return MistakeDetailScreen(mistakeId: id);
         },
       ),
+    ],
+  ),
+  // 分支 2: 课程表
+  GoRoute(
+    path: '/schedule',
+    builder: (context, state) => const ScheduleScreen(),
+  ),
+  // 分支 3: 学习计划
+  GoRoute(
+    path: '/plans',
+    builder: (context, state) => const PlansScreen(),
+  ),
+];
+
+final routerProvider = Provider<GoRouter>((ref) {
+  return GoRouter(
+    initialLocation: '/',
+    routes: [
+      // 底部导航 Shell 路由
+      StatefulShellRoute.indexedStack(
+        builder: (context, state, navigationShell) {
+          return MainScaffold(navigationShell: navigationShell);
+        },
+        branches: _shellRoutes.map((route) {
+          return StatefulShellBranch(routes: [route]);
+        }).toList(),
+      ),
+      // 非底部导航的独立页面
       GoRoute(
         path: '/statistics',
         builder: (context, state) => const StatisticsScreen(),
@@ -54,6 +129,17 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/settings',
         builder: (context, state) => const SettingsScreen(),
+      ),
+      GoRoute(
+        path: '/pomodoro',
+        builder: (context, state) {
+          final subjectId = state.uri.queryParameters['subjectId'];
+          final planId = state.uri.queryParameters['planId'];
+          return PomodoroScreen(
+            initialSubjectId: subjectId != null ? int.tryParse(subjectId) : null,
+            initialPlanId: planId != null ? int.tryParse(planId) : null,
+          );
+        },
       ),
     ],
   );

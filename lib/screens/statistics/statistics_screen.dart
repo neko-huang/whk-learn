@@ -54,6 +54,23 @@ final statisticsProvider = FutureProvider<Map<String, dynamic>>((ref) async {
       (difficultyDistribution[mistake.difficultyLevel] ?? 0) + 1;
   }
 
+  // ===== 番茄钟相关统计 =====
+  
+  // 今日学习时长
+  final todayStudyMinutes = await DatabaseService.getTodayStudyMinutes();
+  
+  // 今日番茄钟数量
+  final todayPomodoroCount = await DatabaseService.getTodayPomodoroCount();
+  
+  // 连续打卡天数
+  final studyStreak = await DatabaseService.getStudyStreak();
+  
+  // 各科目学习时长分布（从番茄钟记录）
+  final subjectStudyDistribution = await DatabaseService.getSubjectStudyDistribution();
+  
+  // 最近7天每日学习时长（从番茄钟）
+  final dailyStudyMinutes = await DatabaseService.getDailyStudyMinutes(7);
+
   return {
     'subjects': subjects,
     'mistakesBySubject': mistakesBySubject,
@@ -63,6 +80,12 @@ final statisticsProvider = FutureProvider<Map<String, dynamic>>((ref) async {
     'reviewedMistakes': reviewedMistakes,
     'reviewRate': reviewRate,
     'difficultyDistribution': difficultyDistribution,
+    // 番茄钟统计
+    'todayStudyMinutes': todayStudyMinutes,
+    'todayPomodoroCount': todayPomodoroCount,
+    'studyStreak': studyStreak,
+    'subjectStudyDistribution': subjectStudyDistribution,
+    'dailyStudyMinutes': dailyStudyMinutes,
   };
 });
 
@@ -91,15 +114,27 @@ class StatisticsScreen extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // 今日学习概况
+                _buildTodayStudyCard(data),
+                const SizedBox(height: 20),
+
                 // 总览卡片
                 _buildOverviewCard(data),
                 const SizedBox(height: 20),
 
-                // 7天趋势图
+                // 7天学习时长趋势
+                _buildStudyTrendChart(context, data),
+                const SizedBox(height: 20),
+
+                // 7天易错点趋势
                 _buildTrendChart(data),
                 const SizedBox(height: 20),
 
-                // 科目分布
+                // 科目学习时间分布（番茄钟）
+                _buildSubjectStudyPieChart(context, data),
+                const SizedBox(height: 20),
+
+                // 科目易错点分布
                 _buildSubjectChart(context, data),
                 const SizedBox(height: 20),
 
@@ -117,6 +152,71 @@ class StatisticsScreen extends ConsumerWidget {
     );
   }
 
+  /// 今日学习概况卡片
+  Widget _buildTodayStudyCard(Map<String, dynamic> data) {
+    final todayMinutes = data['todayStudyMinutes'] as int;
+    final todayCount = data['todayPomodoroCount'] as int;
+    final streak = data['studyStreak'] as int;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '🍅 今日学习',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildStudyStatColumn(
+                  '学习时长',
+                  _formatMinutes(todayMinutes),
+                  Colors.red,
+                  Icons.timer,
+                ),
+                _buildStudyStatColumn(
+                  '番茄数',
+                  '$todayCount',
+                  Colors.orange,
+                  Icons.local_fire_department,
+                ),
+                _buildStudyStatColumn(
+                  '连续打卡',
+                  '$streak天',
+                  Colors.green,
+                  Icons.trending_up,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStudyStatColumn(String label, String value, Color color, IconData icon) {
+    return Column(
+      children: [
+        Icon(icon, color: color, size: 28),
+        const SizedBox(height: 8),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(label, style: const TextStyle(color: Colors.grey, fontSize: 12)),
+      ],
+    );
+  }
+
   /// 总览卡片
   Widget _buildOverviewCard(Map<String, dynamic> data) {
     final total = data['totalMistakes'] as int;
@@ -130,7 +230,7 @@ class StatisticsScreen extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              '📊 学习总览',
+              '📊 易错点总览',
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
@@ -165,7 +265,108 @@ class StatisticsScreen extends ConsumerWidget {
     );
   }
 
-  /// 7天趋势图
+  /// 7天学习时长趋势图
+  Widget _buildStudyTrendChart(BuildContext context, Map<String, dynamic> data) {
+    final dailyMinutes = data['dailyStudyMinutes'] as List<MapEntry<DateTime, int>>;
+    final maxValue = dailyMinutes.map((e) => e.value).fold(0, (a, b) => a > b ? a : b);
+
+    if (maxValue == 0) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '⏱ 学习时长趋势',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 16),
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text('暂无学习记录', style: TextStyle(color: Colors.grey)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '⏱ 学习时长趋势（分钟）',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 150,
+              child: BarChart(
+                BarChartData(
+                  alignment: BarChartAlignment.spaceAround,
+                  maxY: (maxValue + 10).toDouble(),
+                  barTouchData: BarTouchData(
+                    touchTooltipData: BarTouchTooltipData(
+                      getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                        final minutes = rod.toY.toInt();
+                        return BarTooltipItem(
+                          '$minutes 分钟',
+                          const TextStyle(color: Colors.white, fontSize: 12),
+                        );
+                      },
+                    ),
+                  ),
+                  titlesData: FlTitlesData(
+                    leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                    bottomTitles: AxisTitles(
+                      sideTitles: SideTitles(
+                        showTitles: true,
+                        getTitlesWidget: (value, meta) {
+                          if (value.toInt() >= 0 && value.toInt() < dailyMinutes.length) {
+                            final date = dailyMinutes[value.toInt()].key;
+                            return Text(
+                              '${date.month}/${date.day}',
+                              style: const TextStyle(fontSize: 10),
+                            );
+                          }
+                          return const Text('');
+                        },
+                      ),
+                    ),
+                  ),
+                  gridData: const FlGridData(show: false),
+                  borderData: FlBorderData(show: false),
+                  barGroups: dailyMinutes.asMap().entries.map((entry) {
+                    return BarChartGroupData(
+                      x: entry.key,
+                      barRods: [
+                        BarChartRodData(
+                          toY: entry.value.value.toDouble(),
+                          color: Colors.orange,
+                          width: 20,
+                          borderRadius: const BorderRadius.vertical(top: Radius.circular(4)),
+                        ),
+                      ],
+                    );
+                  }).toList(),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 7天易错点趋势图
   Widget _buildTrendChart(Map<String, dynamic> data) {
     final trend = data['dailyTrend'] as List<MapEntry<DateTime, int>>;
     final maxValue = trend.map((e) => e.value).fold(0, (a, b) => a > b ? a : b);
@@ -177,7 +378,7 @@ class StatisticsScreen extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              '📈 最近7天',
+              '📈 最近7天（易错点）',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 16),
@@ -232,7 +433,118 @@ class StatisticsScreen extends ConsumerWidget {
     );
   }
 
-  /// 科目分布图
+  /// 科目学习时间分布饼图（从番茄钟记录）
+  Widget _buildSubjectStudyPieChart(BuildContext context, Map<String, dynamic> data) {
+    final subjects = data['subjects'] as List<Subject>;
+    final distribution = data['subjectStudyDistribution'] as Map<int, int>;
+
+    if (distribution.isEmpty) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                '🎯 科目学习时间',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 16),
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Text('暂无学习记录', style: TextStyle(color: Colors.grey)),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final subjectMap = {for (var s in subjects) s.id: s};
+    final chartSubjects = distribution.keys
+        .where((id) => subjectMap.containsKey(id))
+        .toList();
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              '🎯 科目学习时间',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+            const SizedBox(height: 16),
+            SizedBox(
+              height: 180,
+              child: Row(
+                children: [
+                  Expanded(
+                    flex: 2,
+                    child: PieChart(
+                      PieChartData(
+                        sectionsSpace: 2,
+                        centerSpaceRadius: 0,
+                        sections: chartSubjects.map((id) {
+                          final minutes = distribution[id] ?? 0;
+                          final subject = subjectMap[id]!;
+                          return PieChartSectionData(
+                            value: minutes.toDouble(),
+                            color: subject.displayColor,
+                            radius: 60,
+                            showTitle: false,
+                          );
+                        }).toList(),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    flex: 2,
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: chartSubjects.map((id) {
+                        final minutes = distribution[id] ?? 0;
+                        final subject = subjectMap[id]!;
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 4),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 12,
+                                height: 12,
+                                decoration: BoxDecoration(
+                                  color: subject.displayColor,
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  '${subject.name}: ${_formatMinutes(minutes)}',
+                                  style: const TextStyle(fontSize: 12),
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// 科目易错点分布图
   Widget _buildSubjectChart(BuildContext context, Map<String, dynamic> data) {
     final subjects = data['subjects'] as List<Subject>;
     final mistakesBySubject = data['mistakesBySubject'] as Map<int, int>;
@@ -251,7 +563,7 @@ class StatisticsScreen extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               const Text(
-                '📚 科目分布',
+                '📚 科目易错点分布',
                 style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
               ),
               const SizedBox(height: 16),
@@ -274,7 +586,7 @@ class StatisticsScreen extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              '📚 科目分布',
+              '📚 科目易错点分布',
               style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 16),
@@ -447,6 +759,13 @@ class StatisticsScreen extends ConsumerWidget {
       ),
     );
   }
+
+  String _formatMinutes(int minutes) {
+    if (minutes >= 60) {
+      final h = minutes ~/ 60;
+      final m = minutes % 60;
+      return m > 0 ? '${h}h${m}m' : '${h}h';
+    }
+    return '${minutes}m';
+  }
 }
-
-

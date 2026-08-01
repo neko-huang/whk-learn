@@ -156,36 +156,74 @@ class HomeScreen extends ConsumerWidget {
 
   /// 快捷操作
   Widget _buildQuickActions(BuildContext context) {
-    return Row(
+    return Column(
       children: [
-        Expanded(
-          child: _buildActionButton(
-            context,
-            icon: Icons.camera_alt,
-            label: '拍照记录',
-            onTap: () => context.push('/mistakes/add'),
-            color: Colors.purple,
-          ),
+        Row(
+          children: [
+            Expanded(
+              child: _buildActionButton(
+                context,
+                icon: Icons.camera_alt,
+                label: '拍照记录',
+                onTap: () => context.push('/mistakes/add'),
+                color: Colors.purple,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildActionButton(
+                context,
+                icon: Icons.timer,
+                label: '番茄钟',
+                onTap: () => context.push('/pomodoro'),
+                color: Colors.red,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildActionButton(
+                context,
+                icon: Icons.bar_chart,
+                label: '学习统计',
+                onTap: () => context.push('/statistics'),
+                color: Colors.teal,
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildActionButton(
-            context,
-            icon: Icons.bar_chart,
-            label: '学习统计',
-            onTap: () => context.push('/statistics'),
-            color: Colors.teal,
-          ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: _buildActionButton(
-            context,
-            icon: Icons.subject,
-            label: '科目管理',
-            onTap: () => _showSubjectDialog(context),
-            color: Colors.indigo,
-          ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _buildActionButton(
+                context,
+                icon: Icons.subject,
+                label: '科目管理',
+                onTap: () => _showSubjectDialog(context),
+                color: Colors.indigo,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildActionButton(
+                context,
+                icon: Icons.calendar_today,
+                label: '课程表',
+                onTap: () => context.go('/schedule'),
+                color: Colors.cyan,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildActionButton(
+                context,
+                icon: Icons.assignment,
+                label: '学习计划',
+                onTap: () => context.go('/plans'),
+                color: Colors.amber.shade800,
+              ),
+            ),
+          ],
         ),
       ],
     );
