@@ -743,11 +743,12 @@ class DatabaseService {
 
   // ==================== 每日时间安排相关操作（理想 + 实际） ====================
 
-  /// 获取所有理想时间表条目（按 sortOrder 排序）
-  static Future<List<DailySchedule>> getIdealSchedules() async {
+  /// 获取某天的理想时间表（按 sortOrder 排序）
+  static Future<List<DailySchedule>> getIdealSchedulesByDate(DateTime date) async {
     final db = await database;
+    final normalizedDate = DateTime(date.year, date.month, date.day);
     return await (db.select(db.dailySchedules)
-      ..where((t) => t.scheduleType.equals('ideal'))
+      ..where((t) => t.date.equals(normalizedDate) & t.scheduleType.equals('ideal'))
       ..orderBy([(t) => OrderingTerm.asc(t.sortOrder), (t) => OrderingTerm.asc(t.startTime)])
     ).get();
   }
@@ -762,8 +763,9 @@ class DatabaseService {
     ).get();
   }
 
-  /// 添加理想安排
+  /// 添加理想安排（按日期独立存储）
   static Future<int> addIdealSchedule({
+    required DateTime date,
     required String startTime,
     required String endTime,
     required String title,
@@ -771,8 +773,7 @@ class DatabaseService {
     int sortOrder = 0,
   }) async {
     final db = await database;
-    final today = DateTime.now();
-    final normalizedDate = DateTime(today.year, today.month, today.day);
+    final normalizedDate = DateTime(date.year, date.month, date.day);
     return await db.into(db.dailySchedules).insert(
       DailySchedulesCompanion.insert(
         date: normalizedDate,
@@ -810,69 +811,6 @@ class DatabaseService {
   static Future<bool> deleteIdealSchedule(int id) async {
     final db = await database;
     return await (db.delete(db.dailySchedules)..where((t) => t.id.equals(id) & t.scheduleType.equals('ideal'))).go() > 0;
-  }
-
-  /// 将一条理想安排复制到实际时间表
-  static Future<int> migrateIdealToActual(int idealId, DateTime targetDate) async {
-    final db = await database;
-    final normalizedDate = DateTime(targetDate.year, targetDate.month, targetDate.day);
-
-    final ideal = await (db.select(db.dailySchedules)
-      ..where((t) => t.id.equals(idealId) & t.scheduleType.equals('ideal'))
-    ).getSingleOrNull();
-
-    if (ideal == null) return -1;
-
-    // 获取当天实际表的最大 sortOrder
-    final existingActual = await (db.select(db.dailySchedules)
-      ..where((t) => t.date.equals(normalizedDate) & t.scheduleType.equals('actual'))
-    ).get();
-    final nextOrder = existingActual.isEmpty ? 0 : existingActual.map((e) => e.sortOrder).reduce((a, b) => a > b ? a : b) + 1;
-
-    return await db.into(db.dailySchedules).insert(
-      DailySchedulesCompanion.insert(
-        date: normalizedDate,
-        startTime: ideal.startTime,
-        endTime: ideal.endTime,
-        title: ideal.title,
-        note: Value(ideal.note),
-        sortOrder: Value(nextOrder),
-        scheduleType: const Value('actual'),
-      ),
-    );
-  }
-
-  /// 将所有理想安排批量复制到实际时间表
-  static Future<int> migrateAllIdealToActual(DateTime targetDate) async {
-    final db = await database;
-    final normalizedDate = DateTime(targetDate.year, targetDate.month, targetDate.day);
-
-    final ideals = await getIdealSchedules();
-    if (ideals.isEmpty) return 0;
-
-    // 获取当天实际表的最大 sortOrder
-    final existingActual = await (db.select(db.dailySchedules)
-      ..where((t) => t.date.equals(normalizedDate) & t.scheduleType.equals('actual'))
-    ).get();
-    var nextOrder = existingActual.isEmpty ? 0 : existingActual.map((e) => e.sortOrder).reduce((a, b) => a > b ? a : b) + 1;
-
-    int count = 0;
-    for (final ideal in ideals) {
-      await db.into(db.dailySchedules).insert(
-        DailySchedulesCompanion.insert(
-          date: normalizedDate,
-          startTime: ideal.startTime,
-          endTime: ideal.endTime,
-          title: ideal.title,
-          note: Value(ideal.note),
-          sortOrder: Value(nextOrder),
-          scheduleType: const Value('actual'),
-        ),
-      );
-      nextOrder++;
-      count++;
-    }
-    return count;
   }
 
   /// 更新实际安排
@@ -975,5 +913,168 @@ class DatabaseService {
     final today = DateTime(now.year, now.month, now.day);
     final schedules = await getActualSchedulesByDate(today);
     return schedules.length;
+  }
+
+  // ==================== 日历事项相关操作 ====================
+
+  /// 获取某天的所有日历事项（包括长期安排和一次性事项）
+  static Future<List<CalendarEvent>> getCalendarEventsByDate(DateTime date) async {
+    final db = await database;
+    final normalizedDate = DateTime(date.year, date.month, date.day);
+    final weekday = date.weekday; // 1-7
+
+    // 一次性事项：eventDate 等于该日期
+    final oneTimeEvents = await (db.select(db.calendarEvents)
+      ..where((t) =>
+          t.eventType.equals('one_time') &
+          t.eventDate.equals(normalizedDate))
+    ).get();
+
+    // 长期安排：repeatWeekday 等于该日期的 weekday
+    final longTermEvents = await (db.select(db.calendarEvents)
+      ..where((t) =>
+          t.eventType.equals('long_term') &
+          t.repeatWeekday.equals(weekday))
+    ).get();
+
+    return [...oneTimeEvents, ...longTermEvents];
+  }
+
+  /// 获取指定月份的所有事项（用于日历标记）
+  static Future<List<CalendarEvent>> getCalendarEventsByMonth(int year, int month) async {
+    final db = await database;
+    final start = DateTime(year, month, 1);
+    final end = DateTime(year, month + 1, 0); // 该月最后一天
+
+    // 一次性事项：在当月范围内
+    final oneTimeEvents = await (db.select(db.calendarEvents)
+      ..where((t) =>
+          t.eventType.equals('one_time') &
+          t.eventDate.isBiggerOrEqualValue(start) &
+          t.eventDate.isSmallerOrEqualValue(end))
+    ).get();
+
+    // 长期安排：全部返回（因为每天都要显示）
+    final longTermEvents = await (db.select(db.calendarEvents)
+      ..where((t) => t.eventType.equals('long_term'))
+    ).get();
+
+    return [...oneTimeEvents, ...longTermEvents];
+  }
+
+  /// 添加日历事项
+  static Future<int> addCalendarEvent({
+    required String title,
+    String description = '',
+    required String eventType,
+    DateTime? eventDate,
+    String? eventTime,
+    int? repeatWeekday,
+    String? repeatStartTime,
+    String? repeatEndTime,
+    bool needReminder = false,
+    int reminderMinutesBefore = 0,
+  }) async {
+    final db = await database;
+    return await db.into(db.calendarEvents).insert(
+      CalendarEventsCompanion.insert(
+        title: title,
+        description: Value(description),
+        eventType: eventType,
+        eventDate: Value(eventDate),
+        eventTime: Value(eventTime),
+        repeatWeekday: Value(repeatWeekday),
+        repeatStartTime: Value(repeatStartTime),
+        repeatEndTime: Value(repeatEndTime),
+        needReminder: Value(needReminder),
+        reminderMinutesBefore: Value(reminderMinutesBefore),
+      ),
+    );
+  }
+
+  /// 更新日历事项
+  static Future<bool> updateCalendarEvent(int id, {
+    String? title,
+    String? description,
+    String? eventType,
+    DateTime? eventDate,
+    String? eventTime,
+    int? repeatWeekday,
+    String? repeatStartTime,
+    String? repeatEndTime,
+    bool? needReminder,
+    int? reminderMinutesBefore,
+  }) async {
+    final db = await database;
+    return await (db.update(db.calendarEvents)..where((t) => t.id.equals(id))).write(
+      CalendarEventsCompanion(
+        title: title != null ? Value(title) : const Value.absent(),
+        description: description != null ? Value(description) : const Value.absent(),
+        eventType: eventType != null ? Value(eventType) : const Value.absent(),
+        eventDate: eventDate != null ? Value(eventDate) : const Value.absent(),
+        eventTime: eventTime != null ? Value(eventTime) : const Value.absent(),
+        repeatWeekday: repeatWeekday != null ? Value(repeatWeekday) : const Value.absent(),
+        repeatStartTime: repeatStartTime != null ? Value(repeatStartTime) : const Value.absent(),
+        repeatEndTime: repeatEndTime != null ? Value(repeatEndTime) : const Value.absent(),
+        needReminder: needReminder != null ? Value(needReminder) : const Value.absent(),
+        reminderMinutesBefore: reminderMinutesBefore != null ? Value(reminderMinutesBefore) : const Value.absent(),
+      ),
+    ) > 0;
+  }
+
+  /// 删除日历事项
+  static Future<bool> deleteCalendarEvent(int id) async {
+    final db = await database;
+    return await (db.delete(db.calendarEvents)..where((t) => t.id.equals(id))).go() > 0;
+  }
+
+  /// 获取需要提醒的事项（当天需要提醒的）
+  static Future<List<CalendarEvent>> getUpcomingReminders() async {
+    final db = await database;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final weekday = now.weekday;
+
+    // 一次性事项：今天的，且需要提醒
+    final oneTimeReminders = await (db.select(db.calendarEvents)
+      ..where((t) =>
+          t.eventType.equals('one_time') &
+          t.eventDate.equals(today) &
+          t.needReminder.equals(true))
+    ).get();
+
+    // 长期安排：今天的，且需要提醒
+    final longTermReminders = await (db.select(db.calendarEvents)
+      ..where((t) =>
+          t.eventType.equals('long_term') &
+          t.repeatWeekday.equals(weekday) &
+          t.needReminder.equals(true))
+    ).get();
+
+    // 过滤出提醒时间已到的
+    final currentMinutes = now.hour * 60 + now.minute;
+    final allReminders = [...oneTimeReminders, ...longTermReminders];
+    final dueReminders = allReminders.where((event) {
+      final timeStr = event.eventType == 'one_time' ? event.eventTime : event.repeatStartTime;
+      if (timeStr == null || timeStr.isEmpty) return false;
+      try {
+        final parts = timeStr.split(':');
+        final eventMinutes = int.parse(parts[0]) * 60 + int.parse(parts[1]);
+        final reminderTime = eventMinutes - event.reminderMinutesBefore;
+        return currentMinutes >= reminderTime;
+      } catch (_) {
+        return false;
+      }
+    }).toList();
+
+    return dueReminders;
+  }
+
+  /// 获取所有需要本地通知提醒的事项（用于调度通知）
+  static Future<List<CalendarEvent>> getEventsWithReminders() async {
+    final db = await database;
+    return await (db.select(db.calendarEvents)
+      ..where((t) => t.needReminder.equals(true))
+    ).get();
   }
 }

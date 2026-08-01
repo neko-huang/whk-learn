@@ -116,4 +116,110 @@ class NotificationService {
       await _notifications.cancel(id);
     }
   }
+
+  // ==================== 日程提醒相关 ====================
+
+  /// 安排日程提醒通知（使用日历事项 ID + 固定偏移避免冲突）
+  static Future<void> scheduleCalendarEventNotification({
+    required int eventId,
+    required String title,
+    required DateTime scheduledDate,
+  }) async {
+    if (!_initialized) {
+      await initialize();
+    }
+
+    // 使用 100000 + eventId 作为通知 ID，避免与复习提醒 ID 冲突
+    final notificationId = 100000 + eventId;
+
+    await _notifications.zonedSchedule(
+      notificationId,
+      '📅 日程提醒',
+      title,
+      tz.TZDateTime.from(scheduledDate, tz.local),
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'calendar_channel',
+          '日程提醒',
+          channelDescription: '日历事项提醒通知',
+          importance: Importance.high,
+          priority: Priority.high,
+          icon: '@mipmap/ic_launcher',
+        ),
+        iOS: DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        ),
+      ),
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+    );
+  }
+
+  /// 取消日历事项通知
+  static Future<void> cancelCalendarEventNotification(int eventId) async {
+    await _notifications.cancel(100000 + eventId);
+  }
+
+  /// 批量调度所有日程提醒
+  static Future<void> scheduleAllCalendarReminders(
+      List<Map<String, dynamic>> events) async {
+    if (!_initialized) {
+      await initialize();
+    }
+
+    final now = DateTime.now();
+
+    for (final eventData in events) {
+      final event = eventData['event'] as dynamic;
+      final eventId = event.id as int;
+      final title = event.title as String;
+      final reminderMinutes = event.reminderMinutesBefore as int? ?? 0;
+
+      String? timeStr;
+      DateTime? eventDate;
+
+      if (event.eventType == 'one_time') {
+        eventDate = event.eventDate;
+        timeStr = event.eventTime;
+      } else if (event.eventType == 'long_term') {
+        // 长期安排：计算今天或最近的日期
+        final weekday = event.repeatWeekday;
+        if (weekday == null) continue;
+        timeStr = event.repeatStartTime;
+        final todayWeekday = now.weekday;
+        int daysUntil = weekday - todayWeekday;
+        if (daysUntil < 0) daysUntil += 7;
+        eventDate = DateTime(now.year, now.month, now.day + daysUntil);
+      }
+
+      if (eventDate == null || timeStr == null || timeStr.isEmpty) continue;
+
+      try {
+        final parts = timeStr.split(':');
+        final hour = int.parse(parts[0]);
+        final minute = int.parse(parts[1]);
+        final reminderTime = DateTime(
+          eventDate.year,
+          eventDate.month,
+          eventDate.day,
+          hour,
+          minute,
+        ).subtract(Duration(minutes: reminderMinutes));
+
+        // 只安排未来的提醒
+        if (reminderTime.isAfter(now)) {
+          await scheduleCalendarEventNotification(
+            eventId: eventId,
+            title: title,
+            scheduledDate: reminderTime,
+          );
+        }
+      } catch (_) {
+        continue;
+      }
+    }
+  }
 }

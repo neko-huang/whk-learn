@@ -5,9 +5,9 @@ import 'package:drift/drift.dart' hide Column, Row;
 import '../../models/database.dart';
 import '../../services/database_service.dart';
 
-/// 理想时间表 Provider
-final idealSchedulesProvider = FutureProvider<List<DailySchedule>>(
-  (ref) async => await DatabaseService.getIdealSchedules(),
+/// 理想时间表 Provider（按日期）
+final idealSchedulesProvider = FutureProvider.family<List<DailySchedule>, DateTime>(
+  (ref, date) async => await DatabaseService.getIdealSchedulesByDate(date),
 );
 
 /// 实际时间表 Provider（按日期）
@@ -76,7 +76,7 @@ class _DailyScheduleScreenState extends ConsumerState<DailyScheduleScreen>
   }
 
   void _invalidateAll() {
-    ref.invalidate(idealSchedulesProvider);
+    ref.invalidate(idealSchedulesProvider(_selectedDate));
     ref.invalidate(actualSchedulesProvider(_selectedDate));
   }
 
@@ -95,10 +95,8 @@ class _DailyScheduleScreenState extends ConsumerState<DailyScheduleScreen>
       ),
       body: Column(
         children: [
-          // 日期选择栏（仅在实际时间表 tab 下方有意义，但始终显示供参考）
           _buildDateSelector(),
           const Divider(height: 1),
-          // Tab 内容
           Expanded(
             child: TabBarView(
               controller: _tabController,
@@ -173,7 +171,7 @@ class _DailyScheduleScreenState extends ConsumerState<DailyScheduleScreen>
   // ==================== 理想时间表 Tab ====================
 
   Widget _buildIdealTab() {
-    final idealAsync = ref.watch(idealSchedulesProvider);
+    final idealAsync = ref.watch(idealSchedulesProvider(_selectedDate));
 
     return idealAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -193,32 +191,11 @@ class _DailyScheduleScreenState extends ConsumerState<DailyScheduleScreen>
           );
         }
 
-        return Column(
-          children: [
-            Expanded(
-              child: ListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: ideals.length,
-                itemBuilder: (context, index) =>
-                    _buildIdealCard(ideals[index], index),
-              ),
-            ),
-            // 底部 "全部应用到今天" 按钮
-            Container(
-              padding: const EdgeInsets.all(12),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () => _applyAllIdealToToday(),
-                  icon: const Icon(Icons.download_done),
-                  label: const Text('全部应用到今天'),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                  ),
-                ),
-              ),
-            ),
-          ],
+        return ListView.builder(
+          padding: const EdgeInsets.all(16),
+          itemCount: ideals.length,
+          itemBuilder: (context, index) =>
+              _buildIdealCard(ideals[index], index),
         );
       },
     );
@@ -305,12 +282,6 @@ class _DailyScheduleScreenState extends ConsumerState<DailyScheduleScreen>
                   ),
                 ),
               ),
-              // 一键复制到今天
-              IconButton(
-                icon: Icon(Icons.arrow_forward, color: theme.colorScheme.primary),
-                tooltip: '复制到今天',
-                onPressed: () => _migrateOneToActual(schedule),
-              ),
               // 更多操作
               PopupMenuButton<String>(
                 onSelected: (value) {
@@ -335,30 +306,6 @@ class _DailyScheduleScreenState extends ConsumerState<DailyScheduleScreen>
     );
   }
 
-  Future<void> _migrateOneToActual(DailySchedule ideal) async {
-    final today = DateTime.now();
-    await DatabaseService.migrateIdealToActual(ideal.id, today);
-    ref.invalidate(actualSchedulesProvider(today));
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('「${ideal.title}」已添加到今天')),
-      );
-    }
-  }
-
-  Future<void> _applyAllIdealToToday() async {
-    final today = DateTime.now();
-    final count = await DatabaseService.migrateAllIdealToActual(today);
-    ref.invalidate(actualSchedulesProvider(today));
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('已应用 $count 条安排到今天')),
-      );
-      // 自动切到实际时间表
-      _tabController.animateTo(1);
-    }
-  }
-
   Future<bool> _confirmDeleteIdeal(DailySchedule schedule) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -379,7 +326,7 @@ class _DailyScheduleScreenState extends ConsumerState<DailyScheduleScreen>
     );
     if (confirmed == true) {
       await DatabaseService.deleteIdealSchedule(schedule.id);
-      ref.invalidate(idealSchedulesProvider);
+      ref.invalidate(idealSchedulesProvider(_selectedDate));
       return true;
     }
     return false;
@@ -389,53 +336,29 @@ class _DailyScheduleScreenState extends ConsumerState<DailyScheduleScreen>
 
   Widget _buildActualTab() {
     final actualAsync = ref.watch(actualSchedulesProvider(_selectedDate));
-    final idealAsync = ref.watch(idealSchedulesProvider);
 
     return actualAsync.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (e, _) => Center(child: Text('加载失败: $e')),
       data: (actuals) {
-        return idealAsync.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
-          error: (e, _) => Center(child: Text('加载失败: $e')),
-          data: (ideals) {
-            if (actuals.isEmpty) {
-              return _buildActualEmpty(ideals);
-            }
-            return _buildActualList(actuals);
-          },
-        );
+        if (actuals.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.event_note,
+                    size: 64, color: Colors.grey.shade300),
+                const SizedBox(height: 16),
+                Text(
+                  _isToday ? '今天还没有安排' : '这天没有安排',
+                  style: TextStyle(color: Colors.grey, fontSize: 16),
+                ),
+              ],
+            ),
+          );
+        }
+        return _buildActualList(actuals);
       },
-    );
-  }
-
-  Widget _buildActualEmpty(List<DailySchedule> ideals) {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.event_note,
-              size: 64, color: Colors.grey.shade300),
-          const SizedBox(height: 16),
-          Text(
-            _isToday ? '今天还没有安排' : '这天没有安排',
-            style: TextStyle(color: Colors.grey, fontSize: 16),
-          ),
-          if (ideals.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Text(
-              '理想时间表有 ${ideals.length} 条安排',
-              style: TextStyle(color: Colors.grey.shade600, fontSize: 14),
-            ),
-            const SizedBox(height: 8),
-            TextButton.icon(
-              onPressed: _applyAllIdealToToday,
-              icon: const Icon(Icons.download_done),
-              label: const Text('一键应用'),
-            ),
-          ],
-        ],
-      ),
     );
   }
 
@@ -448,7 +371,6 @@ class _DailyScheduleScreenState extends ConsumerState<DailyScheduleScreen>
         final newOrder = List<DailySchedule>.from(actuals);
         final item = newOrder.removeAt(oldIndex);
         newOrder.insert(newIndex, item);
-        // 更新 UI 即时响应
         final orderedIds = newOrder.map((s) => s.id).toList();
         DatabaseService.reorderActualSchedules(orderedIds);
         ref.invalidate(actualSchedulesProvider(_selectedDate));
@@ -485,76 +407,76 @@ class _DailyScheduleScreenState extends ConsumerState<DailyScheduleScreen>
       child: Card(
         key: ValueKey(schedule.id),
         margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-        child: Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-          child: Row(
-            children: [
-              // 勾选框
-              SizedBox(
-                width: 48,
-                height: 48,
-                child: Checkbox(
-                  value: isDone,
-                  onChanged: (_) async {
-                    await DatabaseService
-                        .toggleActualScheduleCompleted(schedule.id);
-                    ref.invalidate(
-                        actualSchedulesProvider(_selectedDate));
-                  },
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(4)),
-                ),
-              ),
-              // 时间区域（可点击快速修改）
-              InkWell(
-                onTap: () =>
-                    _quickEditTime(schedule, isStart: true),
-                borderRadius: BorderRadius.circular(8),
-                child: Container(
-                  width: 70,
-                  padding: const EdgeInsets.symmetric(
-                      vertical: 8, horizontal: 4),
-                  child: Column(
-                    children: [
-                      Text(
-                        schedule.startTime,
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                          color: isDone ? Colors.grey : null,
-                          decoration: isDone
-                              ? TextDecoration.lineThrough
-                              : null,
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        schedule.endTime,
-                        style: TextStyle(
-                          fontSize: 13,
-                          color: isDone
-                              ? Colors.grey.shade400
-                              : Colors.grey.shade600,
-                          decoration: isDone
-                              ? TextDecoration.lineThrough
-                              : null,
-                        ),
-                      ),
-                    ],
+        child: InkWell(
+          onTap: () => _showActualEditDialog(schedule),
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+            child: Row(
+              children: [
+                // 勾选框
+                SizedBox(
+                  width: 48,
+                  height: 48,
+                  child: Checkbox(
+                    value: isDone,
+                    onChanged: (_) async {
+                      await DatabaseService
+                          .toggleActualScheduleCompleted(schedule.id);
+                      ref.invalidate(
+                          actualSchedulesProvider(_selectedDate));
+                    },
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(4)),
                   ),
                 ),
-              ),
-              Container(
-                width: 1,
-                height: 36,
-                margin: const EdgeInsets.symmetric(horizontal: 4),
-                color: Colors.grey.shade200,
-              ),
-              // 标题 + 备注
-              Expanded(
-                child: InkWell(
-                  onTap: () => _showActualEditDialog(schedule),
+                // 时间区域
+                InkWell(
+                  onTap: () =>
+                      _quickEditTime(schedule, isStart: true),
                   borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    width: 70,
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 8, horizontal: 4),
+                    child: Column(
+                      children: [
+                        Text(
+                          schedule.startTime,
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                            color: isDone ? Colors.grey : null,
+                            decoration: isDone
+                                ? TextDecoration.lineThrough
+                                : null,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          schedule.endTime,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: isDone
+                                ? Colors.grey.shade400
+                                : Colors.grey.shade600,
+                            decoration: isDone
+                                ? TextDecoration.lineThrough
+                                : null,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Container(
+                  width: 1,
+                  height: 36,
+                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  color: Colors.grey.shade200,
+                ),
+                // 标题 + 备注
+                Expanded(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(
                         vertical: 12, horizontal: 8),
@@ -594,17 +516,17 @@ class _DailyScheduleScreenState extends ConsumerState<DailyScheduleScreen>
                     ),
                   ),
                 ),
-              ),
-              // 拖拽手柄
-              ReorderableDragStartListener(
-                index: index,
-                child: Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: Icon(Icons.drag_handle,
-                      color: theme.disabledColor),
+                // 拖拽手柄
+                ReorderableDragStartListener(
+                  index: index,
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: Icon(Icons.drag_handle,
+                        color: theme.disabledColor),
+                  ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -728,6 +650,7 @@ class _DailyScheduleScreenState extends ConsumerState<DailyScheduleScreen>
 
                     if (schedule == null) {
                       await DatabaseService.addIdealSchedule(
+                        date: _selectedDate,
                         startTime: startStr,
                         endTime: endStr,
                         title: titleController.text.trim(),
@@ -742,7 +665,7 @@ class _DailyScheduleScreenState extends ConsumerState<DailyScheduleScreen>
                         note: noteController.text.trim(),
                       );
                     }
-                    ref.invalidate(idealSchedulesProvider);
+                    ref.invalidate(idealSchedulesProvider(_selectedDate));
                     Navigator.pop(ctx, true);
                   },
                   child: const Text('保存'),
@@ -849,7 +772,6 @@ class _DailyScheduleScreenState extends ConsumerState<DailyScheduleScreen>
                     final endStr = _formatTime(endTime);
 
                     if (schedule == null) {
-                      // 新增实际安排，使用 customStatement 方式
                       await _addActualSchedule(
                         startStr, endStr,
                         titleController.text.trim(),
@@ -877,14 +799,13 @@ class _DailyScheduleScreenState extends ConsumerState<DailyScheduleScreen>
     );
   }
 
-  /// 添加一条实际安排（直接通过 db insert，scheduleType 固定为 actual）
+  /// 添加一条实际安排
   Future<void> _addActualSchedule(
       String startTime, String endTime, String title, String note) async {
     final db = await DatabaseService.database;
     final normalizedDate =
         DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
 
-    // 获取当前最大 sortOrder
     final existing = await (db.select(db.dailySchedules)
       ..where((t) =>
           t.date.equals(normalizedDate) & t.scheduleType.equals('actual'))

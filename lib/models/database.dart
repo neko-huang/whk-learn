@@ -104,12 +104,28 @@ class DailySchedules extends Table {
   BoolColumn get isCompleted => boolean().withDefault(const Constant(false))();
 }
 
-@DriftDatabase(tables: [Subjects, Mistakes, MistakeImages, StudyRecords, ReviewRecords, ClassSchedules, StudyPlans, PomodoroRecords, DailySchedules])
+/// 日历事项表
+class CalendarEvents extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get title => text().withLength(min: 1, max: 200)();
+  TextColumn get description => text().withDefault(const Constant(''))();
+  TextColumn get eventType => text()(); // 'long_term' 或 'one_time'
+  DateTimeColumn get eventDate => dateTime().nullable()(); // 具体日期（时间点事项）
+  TextColumn get eventTime => text().nullable()(); // HH:mm 格式（时间点事项）
+  IntColumn get repeatWeekday => integer().nullable()(); // 1-7，周几重复（长期安排）
+  TextColumn get repeatStartTime => text().nullable()(); // HH:mm 格式
+  TextColumn get repeatEndTime => text().nullable()(); // HH:mm 格式
+  BoolColumn get needReminder => boolean().withDefault(const Constant(false))();
+  IntColumn get reminderMinutesBefore => integer().withDefault(const Constant(0))(); // 提前多少分钟提醒
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+}
+
+@DriftDatabase(tables: [Subjects, Mistakes, MistakeImages, StudyRecords, ReviewRecords, ClassSchedules, StudyPlans, PomodoroRecords, DailySchedules, CalendarEvents])
 class AppDatabase extends _$AppDatabase {
   AppDatabase(QueryExecutor e) : super(e);
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -131,6 +147,10 @@ class AppDatabase extends _$AppDatabase {
         // v3 -> v4: 添加 schedule_type 和 is_completed 字段
         await customStatement('ALTER TABLE daily_schedules ADD COLUMN schedule_type TEXT DEFAULT \'actual\'');
         await customStatement('ALTER TABLE daily_schedules ADD COLUMN is_completed BOOLEAN DEFAULT 0');
+      }
+      if (from < 5) {
+        // v4 -> v5: 添加日历事项表
+        await m.createTable(calendarEvents);
       }
     },
   );
