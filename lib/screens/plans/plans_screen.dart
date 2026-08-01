@@ -281,17 +281,7 @@ class _PlansScreenState extends ConsumerState<PlansScreen> with SingleTickerProv
     ).then((_) => ref.invalidate(plansDataProvider));
   }
 
-  /// 编辑计划弹窗
-  Future<void> _showEditPlanDialog(StudyPlan plan) async {
-    final subjects = await DatabaseService.getVisibleSubjects();
-    if (!mounted) return;
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) => _AddEditPlanSheet(subjects: subjects, editPlan: plan),
-    ).then((_) => ref.invalidate(plansDataProvider));
-  }
 }
 
 /// 计划详情弹窗

@@ -490,7 +490,6 @@ class DatabaseService {
 
   /// 获取课程安排带科目信息
   static Future<List<Map<String, dynamic>>> getSchedulesWithSubject() async {
-    final db = await database;
     final schedules = await getAllSchedules();
     final subjects = await getAllSubjects();
     final subjectMap = {for (var s in subjects) s.id: s};
