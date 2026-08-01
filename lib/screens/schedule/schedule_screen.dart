@@ -398,7 +398,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
                     child: ListTile(
                       contentPadding: EdgeInsets.zero,
                       title: Text(
-                        startTime != null ? _formatTime(startTime) : '开始时间',
+                        startTime != null ? _formatTime(startTime!) : '开始时间',
                         style: TextStyle(
                           color: startTime != null ? null : Colors.grey,
                         ),
@@ -422,7 +422,7 @@ class _ScheduleScreenState extends ConsumerState<ScheduleScreen> {
                     child: ListTile(
                       contentPadding: EdgeInsets.zero,
                       title: Text(
-                        endTime != null ? _formatTime(endTime) : '结束时间',
+                        endTime != null ? _formatTime(endTime!) : '结束时间',
                         style: TextStyle(
                           color: endTime != null ? null : Colors.grey,
                         ),

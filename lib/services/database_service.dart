@@ -535,7 +535,7 @@ class DatabaseService {
       StudyPlansCompanion.insert(
         title: title,
         description: Value(description),
-        subjectId: subjectId != null ? Value(subjectId) : const Value.absentNull(),
+        subjectId: subjectId != null ? Value(subjectId) : const Value.absent(),
         startDate: startDate,
         endDate: endDate,
         targetHours: Value(targetHours),
@@ -605,8 +605,8 @@ class DatabaseService {
     final db = await database;
     return await db.into(db.pomodoroRecords).insert(
       PomodoroRecordsCompanion.insert(
-        subjectId: subjectId != null ? Value(subjectId) : const Value.absentNull(),
-        planId: planId != null ? Value(planId) : const Value.absentNull(),
+        subjectId: subjectId != null ? Value(subjectId) : const Value.absent(),
+        planId: planId != null ? Value(planId) : const Value.absent(),
         startTime: startTime,
         endTime: endTime,
         duration: duration,

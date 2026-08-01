@@ -316,7 +316,7 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
             Container(width: 1, height: 40, color: Colors.grey.shade200),
             Column(
               children: [
-                Icon(_currentType == PomodoroType.focus ? Icons.focus_mode : Icons.coffee, color: Colors.green, size: 28),
+                Icon(_currentType == PomodoroType.focus ? Icons.timer : Icons.coffee, color: Colors.green, size: 28),
                 const SizedBox(height: 4),
                 Text(
                   '${_totalSeconds ~/ 60}m',
@@ -360,7 +360,7 @@ class _PomodoroScreenState extends ConsumerState<PomodoroScreen> {
                   children: [
                     Icon(
                       type == PomodoroType.focus
-                          ? Icons.focus_mode
+                          ? Icons.timer
                           : type == PomodoroType.shortBreak
                               ? Icons.coffee
                               : Icons.weekend,

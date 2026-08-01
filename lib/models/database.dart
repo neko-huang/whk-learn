@@ -19,7 +19,7 @@ class Mistakes extends Table {
   TextColumn get description => text().withDefault(const Constant(''))();
   IntColumn get subjectId => integer().references(Subjects, #id)();
   TextColumn get chapter => text().withLength(max: 100).withDefault(const Constant(''))();
-  TextColumn get tags => text().withDefault(const Constant('')); // JSON 数组格式
+  TextColumn get tags => text().withDefault(const Constant(''))(); // JSON 数组格式
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get updatedAt => dateTime().withDefault(currentDateAndTime)();
   DateTimeColumn get nextReviewDate => dateTime().nullable()(); // 下次复习日期（艾宾浩斯）
