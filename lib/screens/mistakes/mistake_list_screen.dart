@@ -1,13 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../app.dart';
 import '../../models/database.dart';
 import '../../models/mistake.dart';
 import '../../services/database_service.dart';
+import '../../services/pdf_export_service.dart';
 
-/// 所有科目 Provider
+/// 所有科目 Provider（按学段过滤）
 final subjectsProvider = FutureProvider<List<Subject>>((ref) async {
-  return await DatabaseService.getVisibleSubjects();
+  final stage = ref.watch(stageProvider);
+  return await DatabaseService.getVisibleSubjects(stage: stage);
 });
 
 /// 易错点列表 Provider
@@ -75,6 +78,10 @@ class _MistakeListScreenState extends ConsumerState<MistakeListScreen> {
       appBar: AppBar(
         title: const Text('易错点'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.picture_as_pdf),
+            onPressed: () => _exportCurrentView(mistakes, subjects),
+          ),
           IconButton(
             icon: const Icon(Icons.filter_list),
             onPressed: () => _showFilterDialog(subjects),
@@ -292,6 +299,44 @@ class _MistakeListScreenState extends ConsumerState<MistakeListScreen> {
         ),
       ),
     );
+  }
+
+  Future<void> _exportCurrentView(
+    AsyncValue<List<MistakeWithSubject>> mistakes,
+    AsyncValue<List<Subject>> subjects,
+  ) async {
+    final data = mistakes.valueOrNull;
+    if (data == null || data.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('没有可导出的内容')),
+      );
+      return;
+    }
+
+    // 确定导出名称
+    String exportName;
+    if (_selectedSubjectId != null) {
+      final subjectData = subjects.valueOrNull;
+      final subject = subjectData?.where((s) => s.id == _selectedSubjectId).firstOrNull;
+      exportName = subject?.name ?? '已选科目';
+    } else {
+      exportName = '全部科目';
+    }
+
+    final result = await PdfExportService.exportSubjectToPdf(
+      subjectName: exportName,
+      mistakes: data,
+    );
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(result != null
+              ? '已导出 $exportName 的 ${data.length} 个易错点'
+              : '导出失败，请重试'),
+        ),
+      );
+    }
   }
 
   void _showFilterDialog(AsyncValue<List<Subject>> subjects) {

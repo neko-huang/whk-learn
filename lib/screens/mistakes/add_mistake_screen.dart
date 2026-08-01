@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../app.dart';
 import '../../models/database.dart';
 import '../../models/mistake.dart';
 import '../../services/database_service.dart';
@@ -42,7 +43,8 @@ class _AddMistakeScreenState extends ConsumerState<AddMistakeScreen> {
   }
 
   Future<void> _loadSubjects() async {
-    final subjects = await DatabaseService.getVisibleSubjects();
+    final stage = ref.read(stageProvider);
+    final subjects = await DatabaseService.getVisibleSubjects(stage: stage);
     setState(() {
       _subjects = subjects;
       _selectedSubjectId ??= subjects.isNotEmpty ? subjects.first.id : null;

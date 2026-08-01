@@ -1,17 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../app.dart';
+import '../../models/database.dart';
 import '../../models/mistake.dart';
 import '../../services/database_service.dart';
+
+/// 当前学段的可见科目 Provider
+final stageSubjectsProvider = FutureProvider<List<Subject>>((ref) async {
+  final stage = ref.watch(stageProvider);
+  return await DatabaseService.getVisibleSubjects(stage: stage);
+});
 
 /// 今日概览 Provider
 final todayStatsProvider = FutureProvider<Map<String, int>>((ref) async {
   return await DatabaseService.getTodayStats();
 });
 
-/// 待复习易错点 Provider
+/// 待复习易错点 Provider（按学段过滤）
 final pendingReviewsProvider = FutureProvider<List<MistakeWithSubject>>((ref) async {
-  return await DatabaseService.getMistakes(needsReview: true);
+  final stage = ref.watch(stageProvider);
+  final subjects = await DatabaseService.getVisibleSubjects(stage: stage);
+  final subjectIds = subjects.map((s) => s.id).toSet();
+  
+  // 获取所有需要复习的，然后按学段过滤
+  final all = await DatabaseService.getMistakes(needsReview: true);
+  return all.where((m) => subjectIds.contains(m.mistake.subjectId)).toList();
 });
 
 /// 首页

@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import '../../models/database.dart';
 import '../../models/mistake.dart';
 import '../../services/database_service.dart';
 import '../../services/notification_service.dart';
@@ -42,6 +43,20 @@ class MistakeDetailScreen extends ConsumerStatefulWidget {
 
 class _MistakeDetailScreenState extends ConsumerState<MistakeDetailScreen> {
   bool _isReviewing = false;
+  List<ReviewRecord> _reviewHistory = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadReviewHistory();
+  }
+
+  Future<void> _loadReviewHistory() async {
+    final records = await DatabaseService.getReviewHistory(widget.mistakeId);
+    if (mounted) {
+      setState(() => _reviewHistory = records);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -188,6 +203,10 @@ class _MistakeDetailScreenState extends ConsumerState<MistakeDetailScreen> {
                     ),
                   ),
                 ),
+                const SizedBox(height: 16),
+
+                // 复习历史
+                _buildReviewHistorySection(),
                 const SizedBox(height: 32),
               ],
             ),
@@ -296,6 +315,82 @@ class _MistakeDetailScreenState extends ConsumerState<MistakeDetailScreen> {
     );
   }
 
+  Widget _buildReviewHistorySection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Text(
+              '复习历史',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+            const Spacer(),
+            if (_reviewHistory.isNotEmpty)
+              Text(
+                '共 ${_reviewHistory.length} 次',
+                style: const TextStyle(fontSize: 12, color: Colors.grey),
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        if (_reviewHistory.isEmpty)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(24),
+              child: Center(
+                child: Column(
+                  children: [
+                    Icon(Icons.history, size: 32, color: Colors.grey.shade300),
+                    const SizedBox(height: 8),
+                    const Text('暂无复习记录', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                  ],
+                ),
+              ),
+            ),
+          )
+        else
+          Card(
+            child: Column(
+              children: _reviewHistory.asMap().entries.map((entry) {
+                final index = entry.key;
+                final record = entry.value;
+                return Column(
+                  children: [
+                    ListTile(
+                      leading: CircleAvatar(
+                        radius: 16,
+                        backgroundColor: Colors.blue.shade50,
+                        child: Text(
+                          '#${_reviewHistory.length - index}',
+                          style: TextStyle(
+                            color: Colors.blue.shade700,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                      title: Text(
+                        _formatDateTime(record.reviewDate),
+                        style: const TextStyle(fontSize: 14),
+                      ),
+                      subtitle: Text(
+                        '间隔 ${record.reviewInterval} 天',
+                        style: const TextStyle(fontSize: 12, color: Colors.grey),
+                      ),
+                      trailing: const Icon(Icons.check_circle, color: Colors.green, size: 20),
+                    ),
+                    if (index < _reviewHistory.length - 1)
+                      const Divider(height: 1, indent: 72),
+                  ],
+                );
+              }).toList(),
+            ),
+          ),
+      ],
+    );
+  }
+
   String _formatDateTime(DateTime dt) {
     return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')} ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
   }
@@ -328,6 +423,13 @@ class _MistakeDetailScreenState extends ConsumerState<MistakeDetailScreen> {
         nextReviewDate: nextReviewDate,
       );
 
+      // 插入复习记录
+      final interval = nextReviewDate.difference(DateTime.now()).inDays.clamp(1, 999);
+      await DatabaseService.addReviewRecord(
+        mistakeId: data.mistake.id,
+        reviewInterval: interval,
+      );
+
       // 更新提醒
       await NotificationService.scheduleReviewNotification(
         mistakeId: data.mistake.id,
@@ -338,6 +440,7 @@ class _MistakeDetailScreenState extends ConsumerState<MistakeDetailScreen> {
 
       // 刷新数据
       ref.invalidate(mistakeDetailProvider(widget.mistakeId));
+      await _loadReviewHistory();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
