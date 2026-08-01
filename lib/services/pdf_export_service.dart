@@ -22,7 +22,7 @@ class PdfExportService {
       pdf.addPage(
         pw.Page(
           pageFormat: PdfPageFormat.a4,
-          build: (context) => _buildTitlePage(subjectName, mistakes.length),
+          build: (context) => pw.Column(children: _buildTitlePage(subjectName, mistakes.length)),
         ),
       );
 
