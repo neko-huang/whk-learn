@@ -28,6 +28,12 @@ jobs:
           channel: 'stable'
           cache: true
 
+      - name: Install Android SDK Platform 35
+        run: |
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-35" || \
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --install "platforms;android-35" --no_https || \
+          echo "SDK platform 35 installation attempted"
+
       - name: Get dependencies
         run: flutter pub get
 
