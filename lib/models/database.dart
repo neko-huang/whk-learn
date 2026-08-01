@@ -100,6 +100,8 @@ class DailySchedules extends Table {
   TextColumn get note => text().withDefault(const Constant(''))(); // 备注
   IntColumn get sortOrder => integer().withDefault(const Constant(0))();
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+  TextColumn get scheduleType => text().withDefault(const Constant('actual'))(); // ideal / actual
+  BoolColumn get isCompleted => boolean().withDefault(const Constant(false))();
 }
 
 @DriftDatabase(tables: [Subjects, Mistakes, MistakeImages, StudyRecords, ReviewRecords, ClassSchedules, StudyPlans, PomodoroRecords, DailySchedules])
@@ -107,7 +109,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase(QueryExecutor e) : super(e);
 
   @override
-  int get schemaVersion => 3;
+  int get schemaVersion => 4;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -124,6 +126,11 @@ class AppDatabase extends _$AppDatabase {
       if (from < 3) {
         // v2 -> v3: 添加每日时间安排表
         await m.createTable(dailySchedules);
+      }
+      if (from < 4) {
+        // v3 -> v4: 添加 schedule_type 和 is_completed 字段
+        await customStatement('ALTER TABLE daily_schedules ADD COLUMN schedule_type TEXT DEFAULT \'actual\'');
+        await customStatement('ALTER TABLE daily_schedules ADD COLUMN is_completed BOOLEAN DEFAULT 0');
       }
     },
   );

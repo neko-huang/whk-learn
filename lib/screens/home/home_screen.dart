@@ -241,8 +241,8 @@ class HomeScreen extends ConsumerWidget {
             Expanded(
               child: _buildActionButton(
                 context,
-                icon: Icons.event_note,
-                label: '日程',
+                icon: Icons.view_timeline,
+                label: '日程规划',
                 onTap: () => context.go('/daily-schedule'),
                 color: Colors.brown,
               ),

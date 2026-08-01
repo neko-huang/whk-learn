@@ -744,21 +744,29 @@ class DatabaseService {
     return dailyMinutes;
   }
 
-  // ==================== 每日时间安排相关操作 ====================
+  // ==================== 每日时间安排相关操作（理想 + 实际） ====================
 
-  /// 获取指定日期的安排（按时间排序）
-  static Future<List<DailySchedule>> getDailySchedulesByDate(DateTime date) async {
+  /// 获取所有理想时间表条目（按 sortOrder 排序）
+  static Future<List<DailySchedule>> getIdealSchedules() async {
     final db = await database;
-    final normalizedDate = DateTime(date.year, date.month, date.day);
     return await (db.select(db.dailySchedules)
-      ..where((t) => t.date.equals(normalizedDate))
+      ..where((t) => t.scheduleType.equals('ideal'))
       ..orderBy([(t) => OrderingTerm.asc(t.sortOrder), (t) => OrderingTerm.asc(t.startTime)])
     ).get();
   }
 
-  /// 添加安排项
-  static Future<int> addDailySchedule({
-    required DateTime date,
+  /// 获取某天的实际时间表（按 sortOrder 排序）
+  static Future<List<DailySchedule>> getActualSchedulesByDate(DateTime date) async {
+    final db = await database;
+    final normalizedDate = DateTime(date.year, date.month, date.day);
+    return await (db.select(db.dailySchedules)
+      ..where((t) => t.date.equals(normalizedDate) & t.scheduleType.equals('actual'))
+      ..orderBy([(t) => OrderingTerm.asc(t.sortOrder), (t) => OrderingTerm.asc(t.startTime)])
+    ).get();
+  }
+
+  /// 添加理想安排
+  static Future<int> addIdealSchedule({
     required String startTime,
     required String endTime,
     required String title,
@@ -766,7 +774,8 @@ class DatabaseService {
     int sortOrder = 0,
   }) async {
     final db = await database;
-    final normalizedDate = DateTime(date.year, date.month, date.day);
+    final today = DateTime.now();
+    final normalizedDate = DateTime(today.year, today.month, today.day);
     return await db.into(db.dailySchedules).insert(
       DailySchedulesCompanion.insert(
         date: normalizedDate,
@@ -775,12 +784,13 @@ class DatabaseService {
         title: title,
         note: Value(note),
         sortOrder: Value(sortOrder),
+        scheduleType: const Value('ideal'),
       ),
     );
   }
 
-  /// 更新安排项
-  static Future<bool> updateDailySchedule(int id, {
+  /// 更新理想安排
+  static Future<bool> updateIdealSchedule(int id, {
     String? startTime,
     String? endTime,
     String? title,
@@ -788,7 +798,7 @@ class DatabaseService {
     int? sortOrder,
   }) async {
     final db = await database;
-    return await (db.update(db.dailySchedules)..where((t) => t.id.equals(id))).write(
+    return await (db.update(db.dailySchedules)..where((t) => t.id.equals(id) & t.scheduleType.equals('ideal'))).write(
       DailySchedulesCompanion(
         startTime: startTime != null ? Value(startTime) : const Value.absent(),
         endTime: endTime != null ? Value(endTime) : const Value.absent(),
@@ -799,10 +809,119 @@ class DatabaseService {
     ) > 0;
   }
 
-  /// 删除安排项
-  static Future<bool> deleteDailySchedule(int id) async {
+  /// 删除理想安排
+  static Future<bool> deleteIdealSchedule(int id) async {
     final db = await database;
-    return await (db.delete(db.dailySchedules)..where((t) => t.id.equals(id))).go() > 0;
+    return await (db.delete(db.dailySchedules)..where((t) => t.id.equals(id) & t.scheduleType.equals('ideal'))).go() > 0;
+  }
+
+  /// 将一条理想安排复制到实际时间表
+  static Future<int> migrateIdealToActual(int idealId, DateTime targetDate) async {
+    final db = await database;
+    final normalizedDate = DateTime(targetDate.year, targetDate.month, targetDate.day);
+
+    final ideal = await (db.select(db.dailySchedules)
+      ..where((t) => t.id.equals(idealId) & t.scheduleType.equals('ideal'))
+    ).getSingleOrNull();
+
+    if (ideal == null) return -1;
+
+    // 获取当天实际表的最大 sortOrder
+    final existingActual = await (db.select(db.dailySchedules)
+      ..where((t) => t.date.equals(normalizedDate) & t.scheduleType.equals('actual'))
+    ).get();
+    final nextOrder = existingActual.isEmpty ? 0 : existingActual.map((e) => e.sortOrder).reduce((a, b) => a > b ? a : b) + 1;
+
+    return await db.into(db.dailySchedules).insert(
+      DailySchedulesCompanion.insert(
+        date: normalizedDate,
+        startTime: ideal.startTime,
+        endTime: ideal.endTime,
+        title: ideal.title,
+        note: Value(ideal.note),
+        sortOrder: Value(nextOrder),
+        scheduleType: const Value('actual'),
+      ),
+    );
+  }
+
+  /// 将所有理想安排批量复制到实际时间表
+  static Future<int> migrateAllIdealToActual(DateTime targetDate) async {
+    final db = await database;
+    final normalizedDate = DateTime(targetDate.year, targetDate.month, targetDate.day);
+
+    final ideals = await getIdealSchedules();
+    if (ideals.isEmpty) return 0;
+
+    // 获取当天实际表的最大 sortOrder
+    final existingActual = await (db.select(db.dailySchedules)
+      ..where((t) => t.date.equals(normalizedDate) & t.scheduleType.equals('actual'))
+    ).get();
+    var nextOrder = existingActual.isEmpty ? 0 : existingActual.map((e) => e.sortOrder).reduce((a, b) => a > b ? a : b) + 1;
+
+    int count = 0;
+    for (final ideal in ideals) {
+      await db.into(db.dailySchedules).insert(
+        DailySchedulesCompanion.insert(
+          date: normalizedDate,
+          startTime: ideal.startTime,
+          endTime: ideal.endTime,
+          title: ideal.title,
+          note: Value(ideal.note),
+          sortOrder: Value(nextOrder),
+          scheduleType: const Value('actual'),
+        ),
+      );
+      nextOrder++;
+      count++;
+    }
+    return count;
+  }
+
+  /// 更新实际安排
+  static Future<bool> updateActualSchedule(int id, {
+    String? startTime,
+    String? endTime,
+    String? title,
+    String? note,
+    int? sortOrder,
+  }) async {
+    final db = await database;
+    return await (db.update(db.dailySchedules)..where((t) => t.id.equals(id) & t.scheduleType.equals('actual'))).write(
+      DailySchedulesCompanion(
+        startTime: startTime != null ? Value(startTime) : const Value.absent(),
+        endTime: endTime != null ? Value(endTime) : const Value.absent(),
+        title: title != null ? Value(title) : const Value.absent(),
+        note: note != null ? Value(note) : const Value.absent(),
+        sortOrder: sortOrder != null ? Value(sortOrder) : const Value.absent(),
+      ),
+    ) > 0;
+  }
+
+  /// 切换实际安排的完成状态
+  static Future<bool> toggleActualScheduleCompleted(int id) async {
+    final db = await database;
+    final item = await (db.select(db.dailySchedules)..where((t) => t.id.equals(id))).getSingleOrNull();
+    if (item == null) return false;
+    return await (db.update(db.dailySchedules)..where((t) => t.id.equals(id))).write(
+      DailySchedulesCompanion(isCompleted: Value(!item.isCompleted)),
+    ) > 0;
+  }
+
+  /// 删除实际安排
+  static Future<bool> deleteActualSchedule(int id) async {
+    final db = await database;
+    return await (db.delete(db.dailySchedules)..where((t) => t.id.equals(id) & t.scheduleType.equals('actual'))).go() > 0;
+  }
+
+  /// 批量更新实际安排的排序
+  static Future<void> reorderActualSchedules(List<int> orderedIds) async {
+    final db = await database;
+    for (int i = 0; i < orderedIds.length; i++) {
+      await (db.update(db.dailySchedules)..where((t) => t.id.equals(orderedIds[i]))).write(
+        DailySchedulesCompanion(sortOrder: Value(i)),
+      );
+    }
   }
 
   /// 检查是否需要归档（当前日期与上次活跃日期不同时触发）
@@ -853,11 +972,11 @@ class DatabaseService {
     return records.length;
   }
 
-  /// 获取今日日程数量
+  /// 获取今日实际日程数量
   static Future<int> getTodayDailyScheduleCount() async {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final schedules = await getDailySchedulesByDate(today);
+    final schedules = await getActualSchedulesByDate(today);
     return schedules.length;
   }
 }
