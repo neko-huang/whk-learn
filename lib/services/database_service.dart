@@ -3,7 +3,7 @@ import 'package:drift/drift.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:sqlite3_flutter_libs/sqlite3_flutter_libs.dart';
-import 'database.dart';
+import '../models/database.dart';
 
 /// 数据库服务 - 管理数据库连接和提供 CRUD 操作
 class DatabaseService {

@@ -448,11 +448,4 @@ class StatisticsScreen extends ConsumerWidget {
   }
 }
 
-/// List extension for asMap()
-extension ListExtension<T> on List<T> {
-  Iterable<MapEntry<int, T>> asMap() sync* {
-    for (int i = 0; i < length; i++) {
-      yield MapEntry(i, this[i]);
-    }
-  }
-}
+

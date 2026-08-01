@@ -54,3 +54,6 @@ app.*.map.json
 # 临时文件
 *.tmp
 *.bak
+
+# drift 生成的代码（CI 中通过 build_runner 生成）
+*.g.dart
