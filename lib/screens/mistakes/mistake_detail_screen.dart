@@ -2,7 +2,6 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import '../../models/database.dart';
 import '../../models/mistake.dart';
 import '../../services/database_service.dart';
 import '../../services/notification_service.dart';
@@ -10,10 +9,10 @@ import '../../services/image_service.dart';
 import '../../utils/spaced_repetition.dart';
 
 /// 易错点详情 Provider
-class MistakeDetailProvider extends StateNotifier<AsyncValue<MistakeWithSubject?>> {
+class MistakeDetailNotifier extends StateNotifier<AsyncValue<MistakeWithSubject?>> {
   final int mistakeId;
 
-  MistakeDetailProvider(this.mistakeId) : super(const AsyncValue.loading()) {
+  MistakeDetailNotifier(this.mistakeId) : super(const AsyncValue.loading()) {
     loadData();
   }
 
@@ -26,6 +25,10 @@ class MistakeDetailProvider extends StateNotifier<AsyncValue<MistakeWithSubject?
     }
   }
 }
+
+final mistakeDetailProvider = StateNotifierProvider.family<MistakeDetailNotifier, AsyncValue<MistakeWithSubject?>, int>(
+  (ref, id) => MistakeDetailNotifier(id),
+);
 
 /// 易错点详情页面
 class MistakeDetailScreen extends ConsumerStatefulWidget {
@@ -42,7 +45,7 @@ class _MistakeDetailScreenState extends ConsumerState<MistakeDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final detail = ref.watch(MistakeDetailProvider(widget.mistakeId));
+    final detail = ref.watch(mistakeDetailProvider(widget.mistakeId));
 
     return detail.when(
       loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
@@ -203,7 +206,7 @@ class _MistakeDetailScreenState extends ConsumerState<MistakeDetailScreen> {
                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                       )
                     : const Icon(Icons.check),
-                label: Text(data.mistake.needsReview ? '完成复习' : '已掌握'),
+                label: Text(data.needsReview ? '完成复习' : '已掌握'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.green,
                   foregroundColor: Colors.white,
@@ -334,7 +337,7 @@ class _MistakeDetailScreenState extends ConsumerState<MistakeDetailScreen> {
       );
 
       // 刷新数据
-      ref.invalidate(MistakeDetailProvider(widget.mistakeId));
+      ref.invalidate(mistakeDetailProvider(widget.mistakeId));
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

@@ -1,9 +1,10 @@
 import 'dart:io';
 import 'package:drift/drift.dart';
+import 'package:drift/native.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
-import 'package:sqlite3_flutter_libs/sqlite3_flutter_libs.dart';
 import '../models/database.dart';
+import '../models/mistake.dart';
 
 /// 数据库服务 - 管理数据库连接和提供 CRUD 操作
 class DatabaseService {
@@ -24,10 +25,7 @@ class DatabaseService {
       await file.parent.create(recursive: true);
     }
 
-    // 在移动端使用 sqlite3_flutter_libs 提供的原生库
-    await applyWorkaroundToOpenDb();
-
-    final db = AppDatabase(file);
+    final db = AppDatabase(NativeDatabase.createInBackground(file));
     
     // 初始化默认科目（仅首次启动时）
     await _initDefaultSubjects(db);
@@ -249,7 +247,7 @@ class DatabaseService {
   /// 删除易错点
   static Future<bool> deleteMistake(int id) async {
     final db = await database;
-    return await (db.delete(db.mistakes)..where((t) => t.id.equals(id))).get() > 0;
+    return await (db.delete(db.mistakes)..where((t) => t.id.equals(id))).go() > 0;
   }
 
   /// 删除图片
@@ -267,7 +265,7 @@ class DatabaseService {
       }
     }
     
-    return await (db.delete(db.mistakeImages)..where((t) => t.id.equals(imageId))).get() > 0;
+    return await (db.delete(db.mistakeImages)..where((t) => t.id.equals(imageId))).go() > 0;
   }
 
   /// 获取需要复习的易错点数量

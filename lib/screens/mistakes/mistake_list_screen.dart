@@ -45,7 +45,7 @@ class MistakeListNotifier extends StateNotifier<AsyncValue<List<MistakeWithSubje
 
 final mistakeListProvider =
     StateNotifierProvider<MistakeListNotifier, AsyncValue<List<MistakeWithSubject>>>(
-  MistakeListNotifier.new,
+  (ref) => MistakeListNotifier(),
 );
 
 /// 易错点列表页面
@@ -216,13 +216,13 @@ class _MistakeListScreenState extends ConsumerState<MistakeListScreen> {
                     ),
                   ),
                   const Spacer(),
-                  if (item.mistake.images.isNotEmpty)
+                  if (item.images.isNotEmpty)
                     Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         const Icon(Icons.image, size: 14, color: Colors.grey),
                         const SizedBox(width: 4),
-                        Text('${item.mistake.images.length}', style: const TextStyle(color: Colors.grey, fontSize: 12)),
+                        Text('${item.images.length}', style: const TextStyle(color: Colors.grey, fontSize: 12)),
                       ],
                     ),
                 ],

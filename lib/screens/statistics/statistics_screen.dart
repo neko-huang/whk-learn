@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../../services/database_service.dart';
 import '../../models/database.dart';
+import '../../models/mistake.dart';
 
 /// 统计数据 Provider
 final statisticsProvider = FutureProvider<Map<String, dynamic>>((ref) async {

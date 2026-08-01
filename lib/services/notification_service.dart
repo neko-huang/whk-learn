@@ -1,5 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/data/latest.dart' as tz_data;
+import 'package:timezone/timezone.dart' as tz;
 
 /// 本地通知服务 - 艾宾浩斯复习提醒
 class NotificationService {
@@ -25,6 +27,7 @@ class NotificationService {
     );
 
     await _notifications.initialize(initSettings);
+    tz_data.initializeTimeZones();
     _initialized = true;
   }
 
@@ -70,7 +73,7 @@ class NotificationService {
       notificationId,
       '📚 复习提醒 - $subjectName',
       title,
-      scheduledDate,
+      tz.TZDateTime.from(scheduledDate, tz.local),
       const NotificationDetails(
         android: AndroidNotificationDetails(
           'review_channel',
