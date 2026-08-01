@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:drift/drift.dart';
+import 'package:drift/drift.dart' show Value;
 import '../../app.dart';
 import '../../models/database.dart';
 import '../../models/mistake.dart';
@@ -87,7 +87,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                           icon: const Icon(Icons.delete_outline, color: Colors.red),
                           onPressed: () => _deleteSubject(subject),
                         ),
-                ),
+                )).toList(),
                 ListTile(
                   leading: const CircleAvatar(
                     backgroundColor: Colors.grey,

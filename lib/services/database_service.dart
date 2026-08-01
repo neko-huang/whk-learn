@@ -39,15 +39,15 @@ class DatabaseService {
     if (count.isNotEmpty) return; // 已有数据，跳过
 
     final defaultSubjects = [
-      SubjectsCompanion.insert(name: '语文', color: '#F44336', sortOrder: 1),
-      SubjectsCompanion.insert(name: '数学', color: '#2196F3', sortOrder: 2),
-      SubjectsCompanion.insert(name: '英语', color: '#4CAF50', sortOrder: 3),
-      SubjectsCompanion.insert(name: '物理', color: '#FF9800', sortOrder: 4),
-      SubjectsCompanion.insert(name: '化学', color: '#9C27B0', sortOrder: 5),
-      SubjectsCompanion.insert(name: '生物', color: '#8BC34A', sortOrder: 6),
-      SubjectsCompanion.insert(name: '政治', color: '#795548', sortOrder: 7),
-      SubjectsCompanion.insert(name: '历史', color: '#607D8B', sortOrder: 8),
-      SubjectsCompanion.insert(name: '地理', color: '#00BCD4', sortOrder: 9),
+      SubjectsCompanion.insert(name: '语文', color: Value('#F44336'), sortOrder: Value(1)),
+      SubjectsCompanion.insert(name: '数学', color: Value('#2196F3'), sortOrder: Value(2)),
+      SubjectsCompanion.insert(name: '英语', color: Value('#4CAF50'), sortOrder: Value(3)),
+      SubjectsCompanion.insert(name: '物理', color: Value('#FF9800'), sortOrder: Value(4)),
+      SubjectsCompanion.insert(name: '化学', color: Value('#9C27B0'), sortOrder: Value(5)),
+      SubjectsCompanion.insert(name: '生物', color: Value('#8BC34A'), sortOrder: Value(6)),
+      SubjectsCompanion.insert(name: '政治', color: Value('#795548'), sortOrder: Value(7)),
+      SubjectsCompanion.insert(name: '历史', color: Value('#607D8B'), sortOrder: Value(8)),
+      SubjectsCompanion.insert(name: '地理', color: Value('#00BCD4'), sortOrder: Value(9)),
     ];
 
     for (final subject in defaultSubjects) {
@@ -87,7 +87,7 @@ class DatabaseService {
     final nextOrder = maxOrder.isEmpty ? 1 : maxOrder.last.sortOrder + 1;
     
     return await db.into(db.subjects).insert(
-      SubjectsCompanion.insert(name: name, color: color, sortOrder: nextOrder),
+      SubjectsCompanion.insert(name: name, color: Value(color), sortOrder: Value(nextOrder)),
     );
   }
 
@@ -127,7 +127,7 @@ class DatabaseService {
       MistakeImagesCompanion.insert(
         mistakeId: mistakeId,
         imagePath: imagePath,
-        sortOrder: sortOrder,
+        sortOrder: Value(sortOrder),
       ),
     );
   }
