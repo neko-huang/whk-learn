@@ -917,7 +917,7 @@ class DatabaseService {
 
   // ==================== 日历事项相关操作 ====================
 
-  /// 获取某天的所有日历事项（包括长期安排和一次性事项）
+  /// 获取某天的所有日历事项（包括长期安排、一次性事项和时间段日程）
   static Future<List<CalendarEvent>> getCalendarEventsByDate(DateTime date) async {
     final db = await database;
     final normalizedDate = DateTime(date.year, date.month, date.day);
@@ -937,7 +937,15 @@ class DatabaseService {
           t.repeatWeekday.equals(weekday))
     ).get();
 
-    return [...oneTimeEvents, ...longTermEvents];
+    // 时间段日程：rangeStartDate <= date 且 rangeEndDate >= date
+    final dateRangeEvents = await (db.select(db.calendarEvents)
+      ..where((t) =>
+          t.eventType.equals('date_range') &
+          t.rangeStartDate.isSmallerOrEqualValue(normalizedDate) &
+          t.rangeEndDate.isBiggerOrEqualValue(normalizedDate))
+    ).get();
+
+    return [...oneTimeEvents, ...longTermEvents, ...dateRangeEvents];
   }
 
   /// 获取指定月份的所有事项（用于日历标记）
@@ -959,7 +967,15 @@ class DatabaseService {
       ..where((t) => t.eventType.equals('long_term'))
     ).get();
 
-    return [...oneTimeEvents, ...longTermEvents];
+    // 时间段日程：与当月有交集（rangeStartDate <= 月末 且 rangeEndDate >= 月初）
+    final dateRangeEvents = await (db.select(db.calendarEvents)
+      ..where((t) =>
+          t.eventType.equals('date_range') &
+          t.rangeStartDate.isSmallerOrEqualValue(end) &
+          t.rangeEndDate.isBiggerOrEqualValue(start))
+    ).get();
+
+    return [...oneTimeEvents, ...longTermEvents, ...dateRangeEvents];
   }
 
   /// 添加日历事项
@@ -972,6 +988,8 @@ class DatabaseService {
     int? repeatWeekday,
     String? repeatStartTime,
     String? repeatEndTime,
+    DateTime? rangeStartDate,
+    DateTime? rangeEndDate,
     bool needReminder = false,
     int reminderMinutesBefore = 0,
   }) async {
@@ -986,6 +1004,8 @@ class DatabaseService {
         repeatWeekday: Value(repeatWeekday),
         repeatStartTime: Value(repeatStartTime),
         repeatEndTime: Value(repeatEndTime),
+        rangeStartDate: Value(rangeStartDate),
+        rangeEndDate: Value(rangeEndDate),
         needReminder: Value(needReminder),
         reminderMinutesBefore: Value(reminderMinutesBefore),
       ),
@@ -1002,6 +1022,8 @@ class DatabaseService {
     int? repeatWeekday,
     String? repeatStartTime,
     String? repeatEndTime,
+    DateTime? rangeStartDate,
+    DateTime? rangeEndDate,
     bool? needReminder,
     int? reminderMinutesBefore,
   }) async {
@@ -1016,6 +1038,8 @@ class DatabaseService {
         repeatWeekday: repeatWeekday != null ? Value(repeatWeekday) : const Value.absent(),
         repeatStartTime: repeatStartTime != null ? Value(repeatStartTime) : const Value.absent(),
         repeatEndTime: repeatEndTime != null ? Value(repeatEndTime) : const Value.absent(),
+        rangeStartDate: rangeStartDate != null ? Value(rangeStartDate) : const Value.absent(),
+        rangeEndDate: rangeEndDate != null ? Value(rangeEndDate) : const Value.absent(),
         needReminder: needReminder != null ? Value(needReminder) : const Value.absent(),
         reminderMinutesBefore: reminderMinutesBefore != null ? Value(reminderMinutesBefore) : const Value.absent(),
       ),
@@ -1051,11 +1075,27 @@ class DatabaseService {
           t.needReminder.equals(true))
     ).get();
 
+    // 时间段日程：今天覆盖的，且需要提醒
+    final dateRangeReminders = await (db.select(db.calendarEvents)
+      ..where((t) =>
+          t.eventType.equals('date_range') &
+          t.rangeStartDate.isSmallerOrEqualValue(today) &
+          t.rangeEndDate.isBiggerOrEqualValue(today) &
+          t.needReminder.equals(true))
+    ).get();
+
     // 过滤出提醒时间已到的
     final currentMinutes = now.hour * 60 + now.minute;
-    final allReminders = [...oneTimeReminders, ...longTermReminders];
+    final allReminders = [...oneTimeReminders, ...longTermReminders, ...dateRangeReminders];
     final dueReminders = allReminders.where((event) {
-      final timeStr = event.eventType == 'one_time' ? event.eventTime : event.repeatStartTime;
+      String? timeStr;
+      if (event.eventType == 'one_time') {
+        timeStr = event.eventTime;
+      } else if (event.eventType == 'long_term') {
+        timeStr = event.repeatStartTime;
+      } else if (event.eventType == 'date_range') {
+        timeStr = event.repeatStartTime; // date_range 复用 repeatStartTime 存储每日提醒时间
+      }
       if (timeStr == null || timeStr.isEmpty) return false;
       try {
         final parts = timeStr.split(':');

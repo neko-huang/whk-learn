@@ -115,6 +115,8 @@ class CalendarEvents extends Table {
   IntColumn get repeatWeekday => integer().nullable()(); // 1-7，周几重复（长期安排）
   TextColumn get repeatStartTime => text().nullable()(); // HH:mm 格式
   TextColumn get repeatEndTime => text().nullable()(); // HH:mm 格式
+  DateTimeColumn get rangeStartDate => dateTime().nullable()(); // 时间段日程开始日期
+  DateTimeColumn get rangeEndDate => dateTime().nullable()(); // 时间段日程结束日期
   BoolColumn get needReminder => boolean().withDefault(const Constant(false))();
   IntColumn get reminderMinutesBefore => integer().withDefault(const Constant(0))(); // 提前多少分钟提醒
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
@@ -125,7 +127,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase(QueryExecutor e) : super(e);
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -151,6 +153,11 @@ class AppDatabase extends _$AppDatabase {
       if (from < 5) {
         // v4 -> v5: 添加日历事项表
         await m.createTable(calendarEvents);
+      }
+      if (from < 6) {
+        // v5 -> v6: 添加时间段日程字段
+        await customStatement('ALTER TABLE calendar_events ADD COLUMN range_start_date INTEGER');
+        await customStatement('ALTER TABLE calendar_events ADD COLUMN range_end_date INTEGER');
       }
     },
   );

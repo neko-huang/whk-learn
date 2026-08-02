@@ -13,6 +13,7 @@ import 'screens/plans/plans_screen.dart';
 import 'screens/pomodoro/pomodoro_screen.dart';
 import 'screens/daily_schedule/daily_schedule_screen.dart';
 import 'screens/focus_mode/focus_mode_screen.dart';
+import 'screens/calendar/calendar_screen.dart';
 
 // ==================== 全局 Provider ====================
 
@@ -152,6 +153,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/focus-mode',
         builder: (context, state) => const FocusModeEntryScreen(),
+      ),
+      GoRoute(
+        path: '/calendar',
+        builder: (context, state) => const CalendarScreen(),
       ),
     ],
   );

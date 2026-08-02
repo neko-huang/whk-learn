@@ -186,6 +186,29 @@ class _DailyScheduleScreenState extends ConsumerState<DailyScheduleScreen>
                 const SizedBox(height: 16),
                 const Text('还没有理想安排，点击 + 添加',
                     style: TextStyle(color: Colors.grey, fontSize: 16)),
+                const SizedBox(height: 24),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  margin: const EdgeInsets.symmetric(horizontal: 32),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).colorScheme.primaryContainer.withOpacity(0.3),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(Icons.auto_awesome, size: 24, color: Theme.of(context).colorScheme.primary),
+                      const SizedBox(height: 8),
+                      Text(
+                        '添加理想安排后，可一键迁移到实际时间表',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Theme.of(context).colorScheme.onPrimaryContainer,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
               ],
             ),
           );
@@ -292,9 +315,13 @@ class _DailyScheduleScreenState extends ConsumerState<DailyScheduleScreen>
                     case 'delete':
                       _confirmDeleteIdeal(schedule);
                       break;
+                    case 'migrate':
+                      _migrateToActual(schedule);
+                      break;
                   }
                 },
                 itemBuilder: (_) => const [
+                  PopupMenuItem(value: 'migrate', child: Text('迁移到实际')),
                   PopupMenuItem(value: 'edit', child: Text('编辑')),
                   PopupMenuItem(value: 'delete', child: Text('删除')),
                 ],
@@ -330,6 +357,32 @@ class _DailyScheduleScreenState extends ConsumerState<DailyScheduleScreen>
       return true;
     }
     return false;
+  }
+
+
+  /// 将理想安排迁移到实际时间表
+  Future<void> _migrateToActual(DailySchedule schedule) async {
+    try {
+      await _addActualSchedule(
+        schedule.startTime,
+        schedule.endTime,
+        schedule.title,
+        schedule.note,
+      );
+      ref.invalidate(idealSchedulesProvider(_selectedDate));
+      ref.invalidate(actualSchedulesProvider(_selectedDate));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('已迁移到实际时间表')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('迁移失败: $e')),
+        );
+      }
+    }
   }
 
   // ==================== 实际时间表 Tab ====================
