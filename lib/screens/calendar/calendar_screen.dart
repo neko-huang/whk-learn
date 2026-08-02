@@ -124,16 +124,16 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     );
   }
 
-  /// 使用 LayoutBuilder + 手动行列布局渲染月历网格，
-  /// 彻底杜绝 GridView + shrinkWrap 约束冲突导致的灰屏问题
+  /// 使用 LayoutBuilder + 手动行列布局渲染月历网格
   Widget _buildMonthGrid(AsyncValue<List<CalendarEvent>> monthEvents) {
     final year = _focusedMonth.year;
     final month = _focusedMonth.month;
 
     // 无论数据加载状态如何，网格都正常渲染
-    // 从 monthEvents 中提取事件日期集合（loading/error 时为空集合）
-    final eventDates = _extractEventDates(monthEvents, year, month);
+    // 提取三类信息：一次性事项日期、长期安排 weekday、时间段范围详情
+    final oneTimeDates = _extractOneTimeEventDates(monthEvents, year, month);
     final longTermWeekdays = _extractLongTermWeekdays(monthEvents);
+    final dateRangeInfo = _extractDateRangeInfo(monthEvents);
 
     final firstDay = DateTime(year, month, 1);
     final daysInMonth = DateTime(year, month + 1, 0).day;
@@ -154,8 +154,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 8),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final cellWidth = constraints.maxWidth / 7;
-            // 安全边界：如果宽度不够，用默认值
+            // 去掉 margin 占用，精确计算每个格子的可用宽度
+            final cellWidth = (constraints.maxWidth / 7) - 4.0; // 4px = 左右各2px margin
             final safeCellWidth = cellWidth > 0 ? cellWidth : 50.0;
             return Column(
               children: List.generate(rowCount, (rowIndex) {
@@ -167,7 +167,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       final dayNum = cellIndex - leadingBlanks + 1;
 
                       if (dayNum < 1 || dayNum > daysInMonth) {
-                        return SizedBox(width: safeCellWidth);
+                        return SizedBox(width: safeCellWidth + 4);
                       }
 
                       final date = DateTime(year, month, dayNum);
@@ -175,15 +175,17 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       final isSelected = date.year == _selectedDate.year &&
                           date.month == _selectedDate.month &&
                           date.day == _selectedDate.day;
-                      final hasEvent = eventDates.contains(date) ||
-                          longTermWeekdays.contains(date.weekday);
                       final isWeekend = date.weekday == 6 || date.weekday == 7;
+
+                      final hasOneTime = oneTimeDates.contains(date);
+                      final hasLongTerm = longTermWeekdays.contains(date.weekday);
+                      final drInfo = dateRangeInfo[date];
 
                       return GestureDetector(
                         onTap: () => _onDayTap(date),
                         child: Container(
                           width: safeCellWidth,
-                          margin: const EdgeInsets.all(2),
+                          margin: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
                           decoration: BoxDecoration(
                             color: isSelected
                                 ? Theme.of(context).colorScheme.primary
@@ -198,33 +200,75 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                                   )
                                 : null,
                           ),
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
+                          child: Stack(
                             children: [
-                              Text(
-                                '$dayNum',
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  fontWeight: isToday || isSelected
-                                      ? FontWeight.bold
-                                      : FontWeight.normal,
-                                  color: isSelected
-                                      ? Colors.white
-                                      : isWeekend
-                                          ? Colors.orange.shade700
-                                          : null,
+                              // 主内容：日期数字 + 彩色圆点
+                              Positioned.fill(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Text(
+                                      '$dayNum',
+                                      style: TextStyle(
+                                        fontSize: 14,
+                                        fontWeight: isToday || isSelected
+                                            ? FontWeight.bold
+                                            : FontWeight.normal,
+                                        color: isSelected
+                                            ? Colors.white
+                                            : isWeekend
+                                                ? Colors.orange.shade700
+                                                : null,
+                                      ),
+                                    ),
+                                    // 类别圆点行
+                                    if (hasOneTime || hasLongTerm)
+                                      Padding(
+                                        padding: const EdgeInsets.only(top: 2),
+                                        child: Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            if (hasOneTime)
+                                              _buildCategoryDot(
+                                                isSelected ? Colors.white : Colors.orange.shade500,
+                                              ),
+                                            if (hasOneTime && hasLongTerm)
+                                              const SizedBox(width: 3),
+                                            if (hasLongTerm)
+                                              _buildCategoryDot(
+                                                isSelected ? Colors.white : Colors.blue.shade400,
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                  ],
                                 ),
                               ),
-                              if (hasEvent)
-                                Container(
-                                  width: 5,
-                                  height: 5,
-                                  margin: const EdgeInsets.only(top: 2),
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: isSelected
-                                        ? Colors.white
-                                        : Theme.of(context).colorScheme.primary,
+                              // 绿色时间段日程底条
+                              if (drInfo != null)
+                                Positioned(
+                                  left: 0,
+                                  right: 0,
+                                  bottom: 2,
+                                  child: Center(
+                                    child: Container(
+                                      height: 4,
+                                      width: safeCellWidth - 4,
+                                      decoration: BoxDecoration(
+                                        color: isSelected
+                                            ? Colors.white.withOpacity(0.8)
+                                            : Colors.green.shade400,
+                                        borderRadius: BorderRadius.horizontal(
+                                          left: Radius.circular(
+                                            drInfo == 'start' || drInfo == 'single' ? 2 : 0,
+                                          ),
+                                          right: Radius.circular(
+                                            drInfo == 'end' || drInfo == 'single' ? 2 : 0,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                 ),
                             ],
@@ -242,38 +286,34 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     );
   }
 
-  /// 从 AsyncValue 中提取有事项的日期集合
-  Set<DateTime> _extractEventDates(AsyncValue<List<CalendarEvent>> monthEvents, int year, int month) {
-    final Set<DateTime> eventDates = {};
+  /// 构建类别小圆点（4px 直径）
+  Widget _buildCategoryDot(Color color) {
+    return Container(
+      width: 5,
+      height: 5,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: color,
+      ),
+    );
+  }
+
+  /// 提取有时间点事项的日期集合（🟠 橙色圆点）
+  Set<DateTime> _extractOneTimeEventDates(AsyncValue<List<CalendarEvent>> monthEvents, int year, int month) {
+    final Set<DateTime> dates = {};
     monthEvents.whenData((events) {
       for (final event in events) {
         if (event.eventType == 'one_time' && event.eventDate != null) {
-          eventDates.add(DateTime(
+          dates.add(DateTime(
             event.eventDate!.year, event.eventDate!.month, event.eventDate!.day,
           ));
         }
-        if (event.eventType == 'date_range' &&
-            event.rangeStartDate != null &&
-            event.rangeEndDate != null) {
-          var d = DateTime(
-            event.rangeStartDate!.year, event.rangeStartDate!.month, event.rangeStartDate!.day,
-          );
-          final end = DateTime(
-            event.rangeEndDate!.year, event.rangeEndDate!.month, event.rangeEndDate!.day,
-          );
-          while (!d.isAfter(end)) {
-            if (d.year == year && d.month == month) {
-              eventDates.add(d);
-            }
-            d = d.add(const Duration(days: 1));
-          }
-        }
       }
     });
-    return eventDates;
+    return dates;
   }
 
-  /// 从 AsyncValue 中提取长期安排的 weekday 集合
+  /// 提取长期安排的 weekday 集合（🔵 蓝色圆点）
   Set<int> _extractLongTermWeekdays(AsyncValue<List<CalendarEvent>> monthEvents) {
     final Set<int> weekdays = {};
     monthEvents.whenData((events) {
@@ -284,6 +324,44 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
       }
     });
     return weekdays;
+  }
+
+  /// 提取时间段日程范围信息（🟢 绿色底条）
+  /// 返回 Map<DateTime, String>，value 为 'start'/'middle'/'end'/'single'
+  Map<DateTime, String> _extractDateRangeInfo(AsyncValue<List<CalendarEvent>> monthEvents) {
+    final Map<DateTime, String> info = {};
+    monthEvents.whenData((events) {
+      for (final event in events) {
+        if (event.eventType == 'date_range' &&
+            event.rangeStartDate != null &&
+            event.rangeEndDate != null) {
+          final start = DateTime(
+            event.rangeStartDate!.year, event.rangeStartDate!.month, event.rangeStartDate!.day,
+          );
+          final end = DateTime(
+            event.rangeEndDate!.year, event.rangeEndDate!.month, event.rangeEndDate!.day,
+          );
+          var d = DateTime(start.year, start.month, start.day);
+
+          if (start == end) {
+            // 单天范围
+            info[d] = 'single';
+          } else {
+            // 开始日
+            info[d] = 'start';
+            d = d.add(const Duration(days: 1));
+            // 中间日
+            while (d.isBefore(end)) {
+              info[d] = 'middle';
+              d = d.add(const Duration(days: 1));
+            }
+            // 结束日
+            info[end] = 'end';
+          }
+        }
+      }
+    });
+    return info;
   }
 
   /// 点击某天时的处理，确保安全
