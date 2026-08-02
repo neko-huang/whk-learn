@@ -73,7 +73,10 @@ class StudyPlans extends Table {
   DateTimeColumn get startDate => dateTime()();
   DateTimeColumn get endDate => dateTime()();
   IntColumn get targetHours => integer().withDefault(const Constant(0))(); // 目标学习小时数
-  IntColumn get completedHours => integer().withDefault(const Constant(0))(); // 已完成小时数（分钟存储，界面转换）
+  /// ⚠️ 字段名为 completedHours 但实际存储的是「分钟」值
+  /// 在 plans_screen.dart 中作为分钟计算（如 completedMinutes = plan.completedHours）
+  /// 数据库迁移代价大，保持字段名不变，使用时注意单位转换
+  IntColumn get completedHours => integer().withDefault(const Constant(0))();
   TextColumn get status => text().withDefault(const Constant('pending'))(); // pending/in_progress/completed
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }

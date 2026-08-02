@@ -859,9 +859,8 @@ class DatabaseService {
     }
   }
 
-  /// 检查是否需要归档（当前日期与上次活跃日期不同时触发）
-  /// 保留旧数据不做删除，仅更新 lastActiveDate
-  static Future<void> archiveAndResetIfNeeded() async {
+  /// 检查并更新上次活跃日期（跨天时更新 lastActiveDate，旧数据保留不做删除）
+  static Future<void> checkAndUpdateActiveDate() async {
     final prefs = await SharedPreferences.getInstance();
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);

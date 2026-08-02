@@ -5,6 +5,8 @@ import 'package:timezone/timezone.dart' as tz;
 
 /// 本地通知服务 - 艾宾浩斯复习提醒
 class NotificationService {
+  /// 日历事项通知 ID 偏移量，避免与复习提醒通知 ID 冲突
+  static const int calendarNotificationOffset = 100000;
   static final FlutterLocalNotificationsPlugin _notifications =
       FlutterLocalNotificationsPlugin();
 
@@ -129,8 +131,8 @@ class NotificationService {
       await initialize();
     }
 
-    // 使用 100000 + eventId 作为通知 ID，避免与复习提醒 ID 冲突
-    final notificationId = 100000 + eventId;
+    // 使用 calendarNotificationOffset + eventId 作为通知 ID，避免与复习提醒 ID 冲突
+    final notificationId = calendarNotificationOffset + eventId;
 
     await _notifications.zonedSchedule(
       notificationId,
@@ -160,14 +162,22 @@ class NotificationService {
 
   /// 取消日历事项通知
   static Future<void> cancelCalendarEventNotification(int eventId) async {
-    await _notifications.cancel(100000 + eventId);
+    await _notifications.cancel(calendarNotificationOffset + eventId);
   }
 
-  /// 批量调度所有日程提醒
+  /// 批量调度所有日程提醒（先取消旧通知，再创建新通知）
   static Future<void> scheduleAllCalendarReminders(
       List<Map<String, dynamic>> events) async {
     if (!_initialized) {
       await initialize();
+    }
+
+    // 先取消所有旧日历通知，避免修改事件时间后旧通知仍弹出
+    final pending = await _notifications.pendingNotificationRequests();
+    for (final req in pending) {
+      if (req.id >= calendarNotificationOffset) {
+        await _notifications.cancel(req.id);
+      }
     }
 
     final now = DateTime.now();

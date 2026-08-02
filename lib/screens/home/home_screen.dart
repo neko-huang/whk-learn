@@ -248,7 +248,15 @@ class HomeScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(width: 12),
-            const Expanded(child: SizedBox()),
+            Expanded(
+              child: _buildActionButton(
+                context,
+                icon: Icons.calendar_month,
+                label: '日历',
+                onTap: () => context.push('/calendar'),
+                color: Colors.pink,
+              ),
+            ),
           ],
         ),
       ],

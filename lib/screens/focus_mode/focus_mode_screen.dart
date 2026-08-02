@@ -163,8 +163,6 @@ class _FocusModeScreenState extends ConsumerState<FocusModeScreen> {
   int _remainingSeconds = 0;
   Timer? _timer;
   bool _isCompleted = false;
-  // ignore: unused_field
-  bool _isRunning = false;
   late String _encouragement;
   DateTime? _startTime;
 
@@ -217,7 +215,6 @@ class _FocusModeScreenState extends ConsumerState<FocusModeScreen> {
 
   void _startTimer() {
     _startTime = DateTime.now();
-    setState(() => _isRunning = true);
 
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -233,7 +230,6 @@ class _FocusModeScreenState extends ConsumerState<FocusModeScreen> {
     _timer?.cancel();
     setState(() {
       _isCompleted = true;
-      _isRunning = false;
       _remainingSeconds = 0;
     });
     _saveRecord();

@@ -45,7 +45,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         children: [
           _buildMonthHeader(),
           _buildWeekdayLabels(),
-          _buildMonthGrid(monthEvents),
+          // 月历网格：使用 SizedBox 固定高度，避免 Expanded 约束冲突
+          SizedBox(
+            height: _calcGridHeight(),
+            child: _buildMonthGrid(monthEvents),
+          ),
           const Divider(height: 1),
           Expanded(
             child: _buildDateEventsList(dateEvents),
@@ -53,6 +57,20 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         ],
       ),
     );
+  }
+
+  /// 计算当前月历网格所需高度
+  double _calcGridHeight() {
+    final year = _focusedMonth.year;
+    final month = _focusedMonth.month;
+    final firstDay = DateTime(year, month, 1);
+    final daysInMonth = DateTime(year, month + 1, 0).day;
+    final startWeekday = firstDay.weekday;
+    final leadingBlanks = startWeekday - 1;
+    final totalCells = leadingBlanks + daysInMonth;
+    final rowCount = (totalCells / 7).ceil();
+    const rowHeight = 56.0;
+    return rowCount * rowHeight;
   }
 
   Widget _buildMonthHeader() {
@@ -111,6 +129,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   Widget _buildMonthGrid(AsyncValue<List<CalendarEvent>> monthEvents) {
     final year = _focusedMonth.year;
     final month = _focusedMonth.month;
+
+    // 无论数据加载状态如何，网格都正常渲染
+    // 从 monthEvents 中提取事件日期集合（loading/error 时为空集合）
+    final eventDates = _extractEventDates(monthEvents, year, month);
+    final longTermWeekdays = _extractLongTermWeekdays(monthEvents);
+
     final firstDay = DateTime(year, month, 1);
     final daysInMonth = DateTime(year, month + 1, 0).day;
     final startWeekday = firstDay.weekday;
@@ -120,46 +144,6 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
 
     final today = DateTime.now();
     final todayKey = DateTime(today.year, today.month, today.day);
-
-    // 确定有事项的日期（包含 one_time、long_term 和 date_range）
-    final Set<DateTime> eventDates = {};
-    monthEvents.whenData((events) {
-      for (final event in events) {
-        if (event.eventType == 'one_time' && event.eventDate != null) {
-          eventDates.add(DateTime(
-            event.eventDate!.year, event.eventDate!.month, event.eventDate!.day,
-          ));
-        }
-        // date_range: 标记所有覆盖的日期
-        if (event.eventType == 'date_range' &&
-            event.rangeStartDate != null &&
-            event.rangeEndDate != null) {
-          final start = DateTime(
-            event.rangeStartDate!.year, event.rangeStartDate!.month, event.rangeStartDate!.day,
-          );
-          final end = DateTime(
-            event.rangeEndDate!.year, event.rangeEndDate!.month, event.rangeEndDate!.day,
-          );
-          var d = start;
-          while (!d.isAfter(end)) {
-            if (d.year == year && d.month == month) {
-              eventDates.add(d);
-            }
-            d = d.add(const Duration(days: 1));
-          }
-        }
-      }
-    });
-
-    // 收集长期安排的 weekday
-    final Set<int> longTermWeekdays = {};
-    monthEvents.whenData((events) {
-      for (final event in events) {
-        if (event.eventType == 'long_term' && event.repeatWeekday != null) {
-          longTermWeekdays.add(event.repeatWeekday!);
-        }
-      }
-    });
 
     const rowHeight = 56.0;
     final gridHeight = rowCount * rowHeight;
@@ -171,6 +155,8 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final cellWidth = constraints.maxWidth / 7;
+            // 安全边界：如果宽度不够，用默认值
+            final safeCellWidth = cellWidth > 0 ? cellWidth : 50.0;
             return Column(
               children: List.generate(rowCount, (rowIndex) {
                 return SizedBox(
@@ -181,7 +167,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       final dayNum = cellIndex - leadingBlanks + 1;
 
                       if (dayNum < 1 || dayNum > daysInMonth) {
-                        return SizedBox(width: cellWidth);
+                        return SizedBox(width: safeCellWidth);
                       }
 
                       final date = DateTime(year, month, dayNum);
@@ -194,9 +180,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
                       final isWeekend = date.weekday == 6 || date.weekday == 7;
 
                       return GestureDetector(
-                        onTap: () => setState(() => _selectedDate = date),
+                        onTap: () => _onDayTap(date),
                         child: Container(
-                          width: cellWidth,
+                          width: safeCellWidth,
                           margin: const EdgeInsets.all(2),
                           decoration: BoxDecoration(
                             color: isSelected
@@ -256,6 +242,58 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     );
   }
 
+  /// 从 AsyncValue 中提取有事项的日期集合
+  Set<DateTime> _extractEventDates(AsyncValue<List<CalendarEvent>> monthEvents, int year, int month) {
+    final Set<DateTime> eventDates = {};
+    monthEvents.whenData((events) {
+      for (final event in events) {
+        if (event.eventType == 'one_time' && event.eventDate != null) {
+          eventDates.add(DateTime(
+            event.eventDate!.year, event.eventDate!.month, event.eventDate!.day,
+          ));
+        }
+        if (event.eventType == 'date_range' &&
+            event.rangeStartDate != null &&
+            event.rangeEndDate != null) {
+          var d = DateTime(
+            event.rangeStartDate!.year, event.rangeStartDate!.month, event.rangeStartDate!.day,
+          );
+          final end = DateTime(
+            event.rangeEndDate!.year, event.rangeEndDate!.month, event.rangeEndDate!.day,
+          );
+          while (!d.isAfter(end)) {
+            if (d.year == year && d.month == month) {
+              eventDates.add(d);
+            }
+            d = d.add(const Duration(days: 1));
+          }
+        }
+      }
+    });
+    return eventDates;
+  }
+
+  /// 从 AsyncValue 中提取长期安排的 weekday 集合
+  Set<int> _extractLongTermWeekdays(AsyncValue<List<CalendarEvent>> monthEvents) {
+    final Set<int> weekdays = {};
+    monthEvents.whenData((events) {
+      for (final event in events) {
+        if (event.eventType == 'long_term' && event.repeatWeekday != null) {
+          weekdays.add(event.repeatWeekday!);
+        }
+      }
+    });
+    return weekdays;
+  }
+
+  /// 点击某天时的处理，确保安全
+  void _onDayTap(DateTime date) {
+    if (!mounted) return;
+    setState(() {
+      _selectedDate = date;
+    });
+  }
+
   Widget _buildDateEventsList(AsyncValue<List<CalendarEvent>> dateEvents) {
     final isToday = _selectedDate.year == DateTime.now().year &&
         _selectedDate.month == DateTime.now().month &&
@@ -286,7 +324,27 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         Expanded(
           child: dateEvents.when(
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Center(child: Text('加载失败: $e')),
+            error: (e, _) => Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.error_outline, size: 48, color: Colors.grey.shade300),
+                    const SizedBox(height: 12),
+                    Text('加载失败', style: TextStyle(color: Colors.grey, fontSize: 14)),
+                    const SizedBox(height: 8),
+                    TextButton.icon(
+                      onPressed: () {
+                        ref.invalidate(calendarDateEventsProvider(_selectedDate));
+                      },
+                      icon: const Icon(Icons.refresh, size: 18),
+                      label: const Text('重试'),
+                    ),
+                  ],
+                ),
+              ),
+            ),
             data: (events) {
               if (events.isEmpty) {
                 return Center(
