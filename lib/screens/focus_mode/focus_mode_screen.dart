@@ -281,6 +281,7 @@ class _FocusModeScreenState extends ConsumerState<FocusModeScreen> {
     final theme = Theme.of(context);
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         const Spacer(),
         // 鼓励语

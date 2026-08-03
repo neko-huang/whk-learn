@@ -47,11 +47,13 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
           _buildWeekdayLabels(),
           // 月历网格：使用 SizedBox 固定高度，避免 Expanded 约束冲突
           SizedBox(
+            key: ValueKey('grid_${_focusedMonth.millisecondsSinceEpoch}'),
             height: _calcGridHeight(),
             child: _buildMonthGrid(monthEvents),
           ),
           const Divider(height: 1),
           Expanded(
+            key: ValueKey('events_${_selectedDate.millisecondsSinceEpoch}'),
             child: _buildDateEventsList(dateEvents),
           ),
         ],

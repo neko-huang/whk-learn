@@ -304,9 +304,10 @@ class _DeepSeekScreenState extends ConsumerState<DeepSeekScreen> {
       }
 
       final req = await client.postUrl(Uri.parse('https://api.deepseek.com/v1/chat/completions'));
-      req.headers.set('Content-Type', 'application/json');
+      req.headers.set('Content-Type', 'application/json; charset=utf-8');
       req.headers.set('Authorization', 'Bearer $_apiKey');
-      req.write(jsonEncode(body));
+      // 用字节方式写入，避免中文等非ASCII字符被 HttpClient 视为非法字符
+      req.add(utf8.encode(jsonEncode(body)));
 
       final res = await req.close();
       final responseBody = await res.transform(utf8.decoder).join();
