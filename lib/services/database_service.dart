@@ -1116,4 +1116,157 @@ class DatabaseService {
       ..where((t) => t.needReminder.equals(true))
     ).get();
   }
+
+  // ==================== DeepSeek 聊天记录 ====================
+
+  /// 获取所有聊天记录（按时间正序）
+  static Future<List<ChatMessage>> getAllChatMessages() async {
+    final db = await database;
+    return await (db.select(db.chatMessages)
+      ..orderBy([(t) => OrderingTerm(expression: t.createdAt, mode: OrderingMode.asc)])
+    ).get();
+  }
+
+  /// 添加聊天消息
+  static Future<int> addChatMessage({required String role, required String content}) async {
+    final db = await database;
+    return await db.into(db.chatMessages).insert(
+      ChatMessagesCompanion.insert(
+        role: role,
+        content: content,
+      ),
+    );
+  }
+
+  /// 清空聊天记录
+  static Future<void> deleteAllChatMessages() async {
+    final db = await database;
+    await db.delete(db.chatMessages).go();
+  }
+
+  // ==================== 本周学习分析数据 ====================
+
+  /// 获取本周分析数据（用于 DeepSeek 分析）
+  static Future<Map<String, dynamic>> getWeeklyAnalysisData() async {
+    final now = DateTime.now();
+    // 当前周一的 00:00
+    final monday = now.subtract(Duration(days: now.weekday - 1));
+    final mondayStart = DateTime(monday.year, monday.month, monday.day);
+    // 下周一的 00:00（作为截止）
+    final nextMonday = mondayStart.add(const Duration(days: 7));
+
+    final db = await database;
+
+    // 1. 本周每日时间安排（理想 vs 实际）
+    final idealSchedules = await (db.select(db.dailySchedules)
+      ..where((t) =>
+          t.date.isBiggerOrEqualValue(mondayStart) &
+          t.date.isSmallerThanValue(nextMonday) &
+          t.scheduleType.equals('ideal'))
+    ).get();
+
+    final actualSchedules = await (db.select(db.dailySchedules)
+      ..where((t) =>
+          t.date.isBiggerOrEqualValue(mondayStart) &
+          t.date.isSmallerThanValue(nextMonday) &
+          t.scheduleType.equals('actual'))
+    ).get();
+
+    final completedActual = actualSchedules.where((s) => s.isCompleted).length;
+    final totalActual = actualSchedules.length;
+
+    // 2. 本周番茄钟/专注记录
+    final pomodoroRecords = await (db.select(db.pomodoroRecords)
+      ..where((t) =>
+          t.startTime.isBiggerOrEqualValue(mondayStart) &
+          t.startTime.isSmallerThanValue(nextMonday) &
+          t.completed.equals(true))
+    ).get();
+
+    // 3. 本周新增易错点
+    final newMistakes = await (db.select(db.mistakes)
+      ..where((t) =>
+          t.createdAt.isBiggerOrEqualValue(mondayStart) &
+          t.createdAt.isSmallerThanValue(nextMonday))
+    ).get();
+
+    // 4. 学习计划
+    final plans = await (db.select(db.studyPlans)
+      ..where((t) =>
+          t.startDate.isSmallerThanValue(nextMonday) &
+          t.endDate.isBiggerOrEqualValue(mondayStart))
+    ).get();
+
+    // 5. 科目对照
+    final subjects = await db.select(db.subjects).get();
+    final subjectMap = {for (final s in subjects) s.id: s.name};
+
+    // 6. 课程表
+    final schedules = await db.select(db.classSchedules).get();
+
+    // 按日期归类理想安排
+    final idealByDate = <String, List<Map<String, dynamic>>>{};
+    for (final s in idealSchedules) {
+      final key = '${s.date.month}/${s.date.day}';
+      idealByDate.putIfAbsent(key, () => []);
+      idealByDate[key]!.add({
+        'time': '${s.startTime}-${s.endTime}',
+        'title': s.title,
+      });
+    }
+
+    // 按日期归类实际安排
+    final actualByDate = <String, List<Map<String, dynamic>>>{};
+    for (final s in actualSchedules) {
+      final key = '${s.date.month}/${s.date.day}';
+      actualByDate.putIfAbsent(key, () => []);
+      actualByDate[key]!.add({
+        'time': '${s.startTime}-${s.endTime}',
+        'title': s.title,
+        'completed': s.isCompleted,
+      });
+    }
+
+    // 各科目学习时长（分钟）
+    final subjectMinutes = <int, int>{};
+    for (final r in pomodoroRecords) {
+      if (r.subjectId != null) {
+        subjectMinutes[r.subjectId!] = (subjectMinutes[r.subjectId!] ?? 0) + r.duration;
+      }
+    }
+
+    // 易错点按科目统计
+    final mistakesBySubject = <int, int>{};
+    for (final m in newMistakes) {
+      mistakesBySubject[m.subjectId] = (mistakesBySubject[m.subjectId] ?? 0) + 1;
+    }
+
+    // 计划信息
+    final planList = plans.map((p) => {
+      'title': p.title,
+      'subject': subjectMap[p.subjectId] ?? '通用',
+      'targetHours': p.targetHours,
+      'completedMinutes': p.completedHours, // 注意：字段名是 completedHours 但实际存的是分钟
+      'status': p.status,
+    }).toList();
+
+    return {
+      'weekStart': '${mondayStart.month}/${mondayStart.day}',
+      'weekEnd': '${nextMonday.subtract(const Duration(days: 1)).month}/${nextMonday.subtract(const Duration(days: 1)).day}',
+      'idealSchedules': idealByDate,
+      'actualSchedules': actualByDate,
+      'scheduleCompletion': '$completedActual/$totalActual',
+      'pomodoroCount': pomodoroRecords.length,
+      'totalStudyMinutes': pomodoroRecords.fold<int>(0, (sum, r) => sum + r.duration),
+      'subjectMinutes': {for (final e in subjectMinutes.entries) subjectMap[e.key] ?? '未知': '${e.value}分钟'},
+      'newMistakes': {for (final e in mistakesBySubject.entries) subjectMap[e.key] ?? '未知': e.value},
+      'totalNewMistakes': newMistakes.length,
+      'plans': planList,
+      'classSchedules': schedules.map((s) => {
+        'subject': subjectMap[s.subjectId] ?? '未知',
+        'weekday': s.weekday,
+        'time': '${s.startTime}-${s.endTime}',
+      }).toList(),
+    };
+  }
 }

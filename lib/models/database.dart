@@ -125,12 +125,20 @@ class CalendarEvents extends Table {
   DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
 }
 
-@DriftDatabase(tables: [Subjects, Mistakes, MistakeImages, StudyRecords, ReviewRecords, ClassSchedules, StudyPlans, PomodoroRecords, DailySchedules, CalendarEvents])
+/// DeepSeek 聊天记录表
+class ChatMessages extends Table {
+  IntColumn get id => integer().autoIncrement()();
+  TextColumn get role => text()(); // 'user' / 'assistant'
+  TextColumn get content => text()();
+  DateTimeColumn get createdAt => dateTime().withDefault(currentDateAndTime)();
+}
+
+@DriftDatabase(tables: [Subjects, Mistakes, MistakeImages, StudyRecords, ReviewRecords, ClassSchedules, StudyPlans, PomodoroRecords, DailySchedules, CalendarEvents, ChatMessages])
 class AppDatabase extends _$AppDatabase {
   AppDatabase(QueryExecutor e) : super(e);
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -161,6 +169,10 @@ class AppDatabase extends _$AppDatabase {
         // v5 -> v6: 添加时间段日程字段
         await customStatement('ALTER TABLE calendar_events ADD COLUMN range_start_date INTEGER');
         await customStatement('ALTER TABLE calendar_events ADD COLUMN range_end_date INTEGER');
+      }
+      if (from < 7) {
+        // v6 -> v7: 添加 DeepSeek 聊天记录表
+        await m.createTable(chatMessages);
       }
     },
   );

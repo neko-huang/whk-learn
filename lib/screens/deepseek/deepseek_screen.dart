@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-/// DeepSeek 聊天消息
+import '../../services/database_service.dart';
+
+/// DeepSeek 聊天消息（内存模型）
 class _ChatMessage {
   final String role; // 'user' | 'assistant'
   final String content;
@@ -16,6 +18,42 @@ class _ChatMessage {
 
   Map<String, dynamic> toJson() => {'role': role, 'content': content};
 }
+
+/// 分析专用系统提示词（仅在本周分析时使用，不影响普通聊天）
+const _analysisPrompt = '''
+你是一位专业的学习分析顾问。以下是用户本周的学习数据，请基于数据给出分析报告。
+
+请按以下结构输出：
+
+📊 **本周学习分析报告（第X周）**
+━━━━━━━━━━━━━━━━━━━━━━
+
+📅 **时间规划执行情况**
+- 理想安排 vs 实际安排对比
+- 完成率统计
+- 每日执行情况概览
+
+📊 **学习投入分析**
+- 总学习时长
+- 各科目学习时长排名
+- 薄弱科目识别
+
+🎯 **计划进度追踪**
+- 各计划完成百分比
+- 滞后/超前提醒
+
+💡 **改进建议**
+- 可操作的具体建议（2-3条）
+- 针对薄弱科目的建议
+
+📈 **本周亮点**
+- 做得好的地方
+
+注意：
+1. 报告要简洁、直观、有数据支撑
+2. 建议要具体可执行，不要泛泛而谈
+3. 语气鼓励为主，适当指出问题
+''';
 
 /// DeepSeek 聊天页面
 class DeepSeekScreen extends ConsumerStatefulWidget {
@@ -31,16 +69,42 @@ class _DeepSeekScreenState extends ConsumerState<DeepSeekScreen> {
   final _messages = <_ChatMessage>[];
 
   bool _loading = false;
+  bool _loaded = false;
   String? _apiKey;
 
   @override
   void initState() {
     super.initState();
-    _messages.add(_ChatMessage(
-      role: 'assistant',
-      content: '你好！我是 DeepSeek AI 助手，有什么可以帮助你的吗？',
-    ));
     _loadApiKey();
+  }
+
+  Future<void> _loadChatHistory() async {
+    if (_loaded) return;
+    _loaded = true;
+
+    try {
+      final records = await DatabaseService.getAllChatMessages();
+      if (records.isNotEmpty && mounted) {
+        setState(() {
+          for (final r in records) {
+            _messages.add(_ChatMessage(role: r.role, content: r.content, time: r.createdAt));
+          }
+        });
+        _scrollToBottom();
+        return;
+      }
+    } catch (_) {
+      // 数据库还没准备好，用默认欢迎语
+    }
+
+    if (_messages.isEmpty && mounted) {
+      setState(() {
+        _messages.add(_ChatMessage(
+          role: 'assistant',
+          content: '你好！我是 DeepSeek AI 助手，有什么可以帮助你的吗？',
+        ));
+      });
+    }
   }
 
   Future<void> _loadApiKey() async {
@@ -48,6 +112,7 @@ class _DeepSeekScreenState extends ConsumerState<DeepSeekScreen> {
     final key = prefs.getString('deepseek_api_key');
     if (mounted) {
       setState(() => _apiKey = key);
+      _loadChatHistory();
       if (key == null || key.isEmpty) {
         WidgetsBinding.instance.addPostFrameCallback((_) => _showKeyDialog());
       }
@@ -91,7 +156,7 @@ class _DeepSeekScreenState extends ConsumerState<DeepSeekScreen> {
     );
 
     if (result == null || result.isEmpty) {
-      if (mounted) Navigator.pop(context); // 没输入就返回
+      if (mounted) Navigator.pop(context);
       return;
     }
 
@@ -99,6 +164,8 @@ class _DeepSeekScreenState extends ConsumerState<DeepSeekScreen> {
     await prefs.setString('deepseek_api_key', result);
     if (mounted) setState(() => _apiKey = result);
   }
+
+  // ───── 普通聊天 ─────
 
   Future<void> _sendMessage() async {
     final text = _inputController.text.trim();
@@ -109,6 +176,9 @@ class _DeepSeekScreenState extends ConsumerState<DeepSeekScreen> {
       return;
     }
 
+    // 保存用户消息
+    await DatabaseService.addChatMessage(role: 'user', content: text);
+
     setState(() {
       _messages.add(_ChatMessage(role: 'user', content: text));
       _loading = true;
@@ -117,8 +187,10 @@ class _DeepSeekScreenState extends ConsumerState<DeepSeekScreen> {
     _scrollToBottom();
 
     try {
-      final reply = await _callDeepSeek(_messages.map((m) => m.toJson()).toList());
+      final reply = await _callDeepSeek(_buildContextMessages());
       if (mounted) {
+        // 保存 AI 回复
+        await DatabaseService.addChatMessage(role: 'assistant', content: reply);
         setState(() {
           _messages.add(_ChatMessage(role: 'assistant', content: reply));
           _loading = false;
@@ -139,15 +211,83 @@ class _DeepSeekScreenState extends ConsumerState<DeepSeekScreen> {
     }
   }
 
+  /// 构建发送给 API 的上下文消息列表
+  List<Map<String, dynamic>> _buildContextMessages() {
+    return _messages.map((m) => m.toJson()).toList();
+  }
+
+  // ───── 本周分析 ─────
+
+  Future<void> _startWeeklyAnalysis() async {
+    if (_loading) return;
+    if (_apiKey == null || _apiKey!.isEmpty) {
+      _showKeyDialog();
+      return;
+    }
+
+    setState(() => _loading = true);
+
+    try {
+      final data = await DatabaseService.getWeeklyAnalysisData();
+      final dataJson = const JsonEncoder.withIndent('  ').convert(data);
+
+      // 构造分析请求：系统提示 + 数据
+      final analysisMessages = [
+        {'role': 'system', 'content': _analysisPrompt},
+        {'role': 'user', 'content': '这是我的本周学习数据，请分析：\n\n```json\n$dataJson\n```'},
+      ];
+
+      // 显示"分析中..."
+      final loadingMsg = _ChatMessage(
+        role: 'assistant',
+        content: '📊 正在分析本周学习数据...',
+      );
+      setState(() {
+        _messages.add(loadingMsg);
+      });
+      _scrollToBottom();
+
+      final reply = await _callDeepSeek(analysisMessages);
+
+      if (mounted) {
+        // 移除"分析中..."，替换为实际结果
+        setState(() {
+          _messages.removeLast();
+          _messages.add(_ChatMessage(role: 'assistant', content: reply));
+          _loading = false;
+        });
+        // 存入数据库
+        await DatabaseService.addChatMessage(role: 'assistant', content: reply);
+        _scrollToBottom();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          if (_messages.isNotEmpty && _messages.last.content.contains('正在分析')) {
+            _messages.removeLast();
+          }
+          _messages.add(_ChatMessage(
+            role: 'assistant',
+            content: '分析失败：$e\n\n请检查数据是否正常。',
+          ));
+          _loading = false;
+        });
+        _scrollToBottom();
+      }
+    }
+  }
+
+  // ───── API 调用 ─────
+
   Future<String> _callDeepSeek(List<Map<String, dynamic>> messages) async {
     final prefs = await SharedPreferences.getInstance();
     final model = prefs.getString('deepseek_model') ?? 'deepseek-chat';
     final reasoningEffort = prefs.getString('deepseek_reasoning_effort') ?? 'off';
 
-    final client = HttpClient()..connectionTimeout = const Duration(seconds: 30);
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 60);
 
     try {
-      // 只保留最近 20 条控制上下文长度
+      // 截断上下文：保留第一条 + 最近 19 条
       if (messages.length > 20) {
         messages = [messages.first, ...messages.sublist(messages.length - 19)];
       }
@@ -159,7 +299,6 @@ class _DeepSeekScreenState extends ConsumerState<DeepSeekScreen> {
         'max_tokens': 4096,
       };
 
-      // 思考等级：仅在开启时传递 reasoning_effort
       if (reasoningEffort != 'off') {
         body['reasoning_effort'] = reasoningEffort;
       }
@@ -203,6 +342,8 @@ class _DeepSeekScreenState extends ConsumerState<DeepSeekScreen> {
     super.dispose();
   }
 
+  // ───── UI ─────
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -211,6 +352,12 @@ class _DeepSeekScreenState extends ConsumerState<DeepSeekScreen> {
       appBar: AppBar(
         title: const Text('DeepSeek'),
         actions: [
+          // 本周分析按钮
+          IconButton(
+            icon: const Icon(Icons.analytics_outlined, size: 20),
+            tooltip: '本周学习分析',
+            onPressed: _startWeeklyAnalysis,
+          ),
           IconButton(
             icon: const Icon(Icons.settings, size: 20),
             tooltip: '设置 API Key',
@@ -219,14 +366,17 @@ class _DeepSeekScreenState extends ConsumerState<DeepSeekScreen> {
           IconButton(
             icon: const Icon(Icons.delete_outline, size: 20),
             tooltip: '清空对话',
-            onPressed: () {
-              setState(() {
-                _messages.clear();
-                _messages.add(_ChatMessage(
-                  role: 'assistant',
-                  content: '对话已清空，有什么可以帮助你的吗？',
-                ));
-              });
+            onPressed: () async {
+              await DatabaseService.deleteAllChatMessages();
+              if (mounted) {
+                setState(() {
+                  _messages.clear();
+                  _messages.add(_ChatMessage(
+                    role: 'assistant',
+                    content: '对话已清空，有什么可以帮助你的吗？',
+                  ));
+                });
+              }
             },
           ),
         ],
