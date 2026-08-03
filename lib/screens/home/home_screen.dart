@@ -197,9 +197,9 @@ class HomeScreen extends ConsumerWidget {
             Expanded(
               child: _buildActionButton(
                 context,
-                icon: Icons.subject,
-                label: '科目管理',
-                onTap: () => _showSubjectDialog(context),
+                icon: Icons.chat,
+                label: 'DeepSeek',
+                onTap: () => context.push('/deepseek'),
                 color: Colors.indigo,
               ),
             ),
@@ -383,30 +383,4 @@ class HomeScreen extends ConsumerWidget {
     );
   }
 
-  /// 科目管理弹窗（简化版）
-  void _showSubjectDialog(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text('科目管理', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            const SizedBox(height: 16),
-            const Text('请在设置页面中管理科目'),
-            const SizedBox(height: 16),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(context);
-                context.push('/settings');
-              },
-              child: const Text('前往设置'),
-            ),
-          ],
-        ),
-      ),
-    );
   }
-}

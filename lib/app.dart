@@ -14,6 +14,7 @@ import 'screens/pomodoro/pomodoro_screen.dart';
 import 'screens/daily_schedule/daily_schedule_screen.dart';
 import 'screens/focus_mode/focus_mode_screen.dart';
 import 'screens/calendar/calendar_screen.dart';
+import 'screens/deepseek/deepseek_screen.dart';
 
 // ==================== 全局 Provider ====================
 
@@ -157,6 +158,10 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/calendar',
         builder: (context, state) => const CalendarScreen(),
+      ),
+      GoRoute(
+        path: '/deepseek',
+        builder: (context, state) => const DeepSeekScreen(),
       ),
     ],
   );
