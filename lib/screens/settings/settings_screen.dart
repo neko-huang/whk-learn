@@ -7,6 +7,7 @@ import '../../models/mistake.dart';
 import '../../services/database_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/pdf_export_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// 设置页面
 class SettingsScreen extends ConsumerStatefulWidget {
