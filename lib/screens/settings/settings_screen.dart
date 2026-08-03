@@ -24,6 +24,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   void initState() {
     super.initState();
     _loadData();
+    _loadDeepSeekConfig();
   }
 
   Future<void> _loadData() async {
@@ -141,6 +142,17 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                   title: Text('学助'),
                   subtitle: Text('版本 1.1.0'),
                 ),
+                const Divider(),
+
+                // DeepSeek AI 设置
+                _buildSectionHeader('DeepSeek AI'),
+                ListTile(
+                  leading: const Icon(Icons.auto_awesome),
+                  title: const Text('DeepSeek 设置'),
+                  subtitle: Text(_getDeepSeekSummary()),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: () => _showDeepSeekConfigDialog(),
+                ),
                 const SizedBox(height: 32),
               ],
             ),
@@ -172,6 +184,135 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       default:
         return '高中';
     }
+  }
+
+  String _getDeepSeekSummary() {
+    final model = _deepSeekModel.isEmpty ? 'deepseek-chat' : _deepSeekModel;
+    final effortMap = {'off': '关闭', 'low': '低', 'medium': '中', 'high': '高'};
+    final effort = effortMap[_deepSeekReasoning] ?? '关闭';
+    return '模型: $model · 思考: $effort';
+  }
+
+  String _deepSeekModel = 'deepseek-chat';
+  String _deepSeekReasoning = 'off';
+  String _deepSeekApiKey = '';
+
+  Future<void> _loadDeepSeekConfig() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _deepSeekApiKey = prefs.getString('deepseek_api_key') ?? '';
+      _deepSeekModel = prefs.getString('deepseek_model') ?? 'deepseek-chat';
+      _deepSeekReasoning = prefs.getString('deepseek_reasoning_effort') ?? 'off';
+    });
+  }
+
+  Future<void> _showDeepSeekConfigDialog() async {
+    String apiKey = _deepSeekApiKey;
+    String model = _deepSeekModel;
+    String reasoning = _deepSeekReasoning;
+    final apiKeyCtrl = TextEditingController(text: apiKey);
+    final modelCtrl = TextEditingController(text: model);
+
+    await showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('DeepSeek 设置'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text('API Key', style: TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: apiKeyCtrl,
+                  decoration: const InputDecoration(
+                    hintText: 'sk-...',
+                    isDense: true,
+                  ),
+                  obscureText: true,
+                  onChanged: (v) => apiKey = v,
+                ),
+                const SizedBox(height: 16),
+                const Text('模型', style: TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                // 预设模型选择
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    'deepseek-chat',
+                    'deepseek-reasoner',
+                    'deepseek-v4-flash',
+                  ].map((m) => ChoiceChip(
+                    label: Text(m, style: const TextStyle(fontSize: 12)),
+                    selected: model == m,
+                    onSelected: (_) {
+                      setDialogState(() {
+                        model = m;
+                        modelCtrl.text = m;
+                      });
+                    },
+                  )).toList(),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: modelCtrl,
+                  decoration: const InputDecoration(
+                    hintText: '或手动输入模型名称',
+                    isDense: true,
+                  ),
+                  onChanged: (v) => model = v,
+                ),
+                const SizedBox(height: 16),
+                const Text('思考等级', style: TextStyle(fontWeight: FontWeight.w600)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    ('off', '关闭'),
+                    ('low', '低'),
+                    ('medium', '中'),
+                    ('high', '高'),
+                  ].map((e) => ChoiceChip(
+                    label: Text(e.$2),
+                    selected: reasoning == e.$1,
+                    onSelected: (_) => setDialogState(() => reasoning = e.$1),
+                  )).toList(),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  '思考等级仅对 deepseek-reasoner 等推理模型有效',
+                  style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('取消'),
+            ),
+            FilledButton(
+              onPressed: () async {
+                final prefs = await SharedPreferences.getInstance();
+                await prefs.setString('deepseek_api_key', apiKey);
+                await prefs.setString('deepseek_model', model);
+                await prefs.setString('deepseek_reasoning_effort', reasoning);
+                setState(() {
+                  _deepSeekApiKey = apiKey;
+                  _deepSeekModel = model;
+                  _deepSeekReasoning = reasoning;
+                });
+                Navigator.pop(ctx);
+              },
+              child: const Text('保存'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   void _showStageDialog(String currentStage) {

@@ -140,6 +140,10 @@ class _DeepSeekScreenState extends ConsumerState<DeepSeekScreen> {
   }
 
   Future<String> _callDeepSeek(List<Map<String, dynamic>> messages) async {
+    final prefs = await SharedPreferences.getInstance();
+    final model = prefs.getString('deepseek_model') ?? 'deepseek-chat';
+    final reasoningEffort = prefs.getString('deepseek_reasoning_effort') ?? 'off';
+
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 30);
 
     try {
@@ -148,25 +152,32 @@ class _DeepSeekScreenState extends ConsumerState<DeepSeekScreen> {
         messages = [messages.first, ...messages.sublist(messages.length - 19)];
       }
 
+      final body = <String, dynamic>{
+        'model': model,
+        'messages': messages,
+        'temperature': 0.7,
+        'max_tokens': 4096,
+      };
+
+      // 思考等级：仅在开启时传递 reasoning_effort
+      if (reasoningEffort != 'off') {
+        body['reasoning_effort'] = reasoningEffort;
+      }
+
       final req = await client.postUrl(Uri.parse('https://api.deepseek.com/v1/chat/completions'));
       req.headers.set('Content-Type', 'application/json');
       req.headers.set('Authorization', 'Bearer $_apiKey');
-      req.write(jsonEncode({
-        'model': 'deepseek-chat',
-        'messages': messages,
-        'temperature': 0.7,
-        'max_tokens': 2048,
-      }));
+      req.write(jsonEncode(body));
 
       final res = await req.close();
-      final body = await res.transform(utf8.decoder).join();
+      final responseBody = await res.transform(utf8.decoder).join();
 
       if (res.statusCode == 200) {
-        final data = jsonDecode(body) as Map<String, dynamic>;
+        final data = jsonDecode(responseBody) as Map<String, dynamic>;
         return data['choices'][0]['message']['content'] as String;
       } else {
-        final err = jsonDecode(body);
-        throw Exception('Error ${res.statusCode}: ${err['error']?['message'] ?? body}');
+        final err = jsonDecode(responseBody);
+        throw Exception('Error ${res.statusCode}: ${err['error']?['message'] ?? responseBody}');
       }
     } finally {
       client.close();
