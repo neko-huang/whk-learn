@@ -376,40 +376,39 @@ class _PlanDetailSheet extends ConsumerWidget {
                   style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 12),
-                if (records.isEmpty)
-                  const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(24),
-                      child: Text('暂无记录', style: TextStyle(color: Colors.grey)),
-                    ),
-                  )
-                else
-                  Expanded(
-                    child: ListView.builder(
-                      controller: scrollController,
-                      itemCount: records.length,
-                      itemBuilder: (context, index) {
-                        final record = records[index];
-                        final dateStr = DateFormat('MM/dd HH:mm').format(record.startTime);
-                        return ListTile(
-                          dense: true,
-                          leading: Icon(
-                            record.type == 'focus' ? Icons.timer : Icons.coffee,
-                            size: 20,
-                            color: record.type == 'focus' ? Colors.red : Colors.green,
-                          ),
-                          title: Text(
-                            '${record.duration}分钟 - ${record.type == 'focus' ? '专注' : '休息'}',
-                            style: const TextStyle(fontSize: 14),
-                          ),
-                          subtitle: Text(dateStr, style: const TextStyle(fontSize: 12)),
-                          trailing: record.completed
-                              ? const Icon(Icons.check_circle, size: 18, color: Colors.green)
-                              : const Icon(Icons.cancel, size: 18, color: Colors.grey),
-                        );
-                      },
-                    ),
-                  ),
+                records.isEmpty
+                    ? const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(24),
+                          child: Text('暂无记录', style: TextStyle(color: Colors.grey)),
+                        ),
+                      )
+                    : Expanded(
+                        child: ListView.builder(
+                          controller: scrollController,
+                          itemCount: records.length,
+                          itemBuilder: (context, index) {
+                            final record = records[index];
+                            final dateStr = DateFormat('MM/dd HH:mm').format(record.startTime);
+                            return ListTile(
+                              dense: true,
+                              leading: Icon(
+                                record.type == 'focus' ? Icons.timer : Icons.coffee,
+                                size: 20,
+                                color: record.type == 'focus' ? Colors.red : Colors.green,
+                              ),
+                              title: Text(
+                                '${record.duration}分钟 - ${record.type == 'focus' ? '专注' : '休息'}',
+                                style: const TextStyle(fontSize: 14),
+                              ),
+                              subtitle: Text(dateStr, style: const TextStyle(fontSize: 12)),
+                              trailing: record.completed
+                                  ? const Icon(Icons.check_circle, size: 18, color: Colors.green)
+                                  : const Icon(Icons.cancel, size: 18, color: Colors.grey),
+                            );
+                          },
+                        ),
+                      ),
                   const SizedBox(height: 20),
                   Row(
                     children: [
