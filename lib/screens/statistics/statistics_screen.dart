@@ -128,7 +128,7 @@ class StatisticsScreen extends ConsumerWidget {
                 const SizedBox(height: 20),
 
                 // 7天学习时长趋势
-                _buildStudyTrendChart(context, data),
+                _buildStudyTrendChart(data),
                 const SizedBox(height: 20),
 
                 // 7天易错点趋势
@@ -136,11 +136,11 @@ class StatisticsScreen extends ConsumerWidget {
                 const SizedBox(height: 20),
 
                 // 科目学习时间分布（番茄钟）
-                _buildSubjectStudyPieChart(context, data),
+                _buildSubjectStudyPieChart(data),
                 const SizedBox(height: 20),
 
                 // 科目易错点分布
-                _buildSubjectChart(context, data),
+                _buildSubjectChart(data),
                 const SizedBox(height: 20),
 
                 // 难度分布
@@ -278,7 +278,7 @@ class StatisticsScreen extends ConsumerWidget {
   }
 
   /// 7天学习时长趋势图
-  Widget _buildStudyTrendChart(BuildContext context, Map<String, dynamic> data) {
+  Widget _buildStudyTrendChart(Map<String, dynamic> data) {
     final dailyMinutes = data['dailyStudyMinutes'] as List<MapEntry<DateTime, int>>;
     final maxValue = dailyMinutes.map((e) => e.value).fold(0, (a, b) => a > b ? a : b);
 
@@ -446,7 +446,7 @@ class StatisticsScreen extends ConsumerWidget {
   }
 
   /// 科目学习时间分布饼图（从番茄钟记录）
-  Widget _buildSubjectStudyPieChart(BuildContext context, Map<String, dynamic> data) {
+  Widget _buildSubjectStudyPieChart(Map<String, dynamic> data) {
     final subjects = data['subjects'] as List<Subject>;
     final distribution = data['subjectStudyDistribution'] as Map<int, int>;
 
@@ -557,7 +557,7 @@ class StatisticsScreen extends ConsumerWidget {
   }
 
   /// 科目易错点分布图
-  Widget _buildSubjectChart(BuildContext context, Map<String, dynamic> data) {
+  Widget _buildSubjectChart(Map<String, dynamic> data) {
     final subjects = data['subjects'] as List<Subject>;
     final mistakesBySubject = data['mistakesBySubject'] as Map<int, int>;
 

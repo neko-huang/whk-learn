@@ -46,7 +46,7 @@ class HomeScreen extends ConsumerWidget {
         actions: [
           IconButton(
             icon: const Icon(Icons.search),
-            onPressed: () => context.push('/mistakes'),
+            onPressed: () => context.go('/mistakes'),
           ),
           IconButton(
             icon: const Icon(Icons.settings),
@@ -303,7 +303,7 @@ class HomeScreen extends ConsumerWidget {
               style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
             TextButton(
-              onPressed: () => context.push('/mistakes'),
+              onPressed: () => context.go('/mistakes'),
               child: const Text('查看全部'),
             ),
           ],

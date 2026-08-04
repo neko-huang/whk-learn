@@ -194,6 +194,8 @@ class _FocusModeScreenState extends ConsumerState<FocusModeScreen> {
   @override
   void dispose() {
     _timer?.cancel();
+    _longPressTimer?.cancel();
+    _exitLongPressTimer?.cancel();
     _mathController.dispose();
     _confirmController.dispose();
     super.dispose();
@@ -218,6 +220,7 @@ class _FocusModeScreenState extends ConsumerState<FocusModeScreen> {
 
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted) return;
       if (_remainingSeconds <= 1) {
         _completeFocus();
       } else {

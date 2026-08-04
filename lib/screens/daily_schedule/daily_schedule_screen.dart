@@ -352,7 +352,6 @@ class _DailyScheduleScreenState extends ConsumerState<DailyScheduleScreen>
     );
     if (confirmed == true) {
       await DatabaseService.deleteIdealSchedule(schedule.id);
-      ref.invalidate(idealSchedulesProvider(_selectedDate));
       return true;
     }
     return false;
@@ -453,8 +452,10 @@ class _DailyScheduleScreenState extends ConsumerState<DailyScheduleScreen>
       ),
       confirmDismiss: (_) async {
         await DatabaseService.deleteActualSchedule(schedule.id);
-        ref.invalidate(actualSchedulesProvider(_selectedDate));
         return true;
+      },
+      onDismissed: (_) {
+        ref.invalidate(actualSchedulesProvider(_selectedDate));
       },
       child: Card(
         key: ValueKey(schedule.id),

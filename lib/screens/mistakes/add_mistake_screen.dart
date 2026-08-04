@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -10,11 +11,12 @@ import '../../services/image_service.dart';
 import '../../services/notification_service.dart';
 import '../../utils/spaced_repetition.dart';
 
-/// 添加易错点页面
+/// 添加/编辑易错点页面
 class AddMistakeScreen extends ConsumerStatefulWidget {
   final int? initialSubjectId;
+  final int? editId;
 
-  const AddMistakeScreen({super.key, this.initialSubjectId});
+  const AddMistakeScreen({super.key, this.initialSubjectId, this.editId});
 
   @override
   ConsumerState<AddMistakeScreen> createState() => _AddMistakeScreenState();
@@ -30,16 +32,49 @@ class _AddMistakeScreenState extends ConsumerState<AddMistakeScreen> {
   int? _selectedSubjectId;
   int _difficultyLevel = 3; // 默认中等难度
   List<String> _imagePaths = [];
+  List<int> _existingImageIds = [];
   bool _isSaving = false;
   bool _enableReview = true; // 是否启用艾宾浩斯提醒
+  bool _isLoading = false;
 
   List<Subject> _subjects = [];
+
+  bool get _isEditing => widget.editId != null;
 
   @override
   void initState() {
     super.initState();
     _selectedSubjectId = widget.initialSubjectId;
     _loadSubjects();
+    if (_isEditing) {
+      _loadExistingData();
+    }
+  }
+
+  Future<void> _loadExistingData() async {
+    setState(() => _isLoading = true);
+    try {
+      final data = await DatabaseService.getMistakeById(widget.editId!);
+      if (data != null && mounted) {
+        _titleController.text = data.mistake.title;
+        _descriptionController.text = data.mistake.description;
+        _chapterController.text = data.mistake.chapter;
+        _tagsController.text = data.tagList.join(',');
+        _selectedSubjectId = data.mistake.subjectId;
+        _difficultyLevel = data.mistake.difficultyLevel;
+        _imagePaths = data.images.map((img) => img.imagePath).toList();
+        _existingImageIds = data.images.map((img) => img.id).toList();
+        _enableReview = data.mistake.nextReviewDate != null;
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('加载数据失败: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   Future<void> _loadSubjects() async {
@@ -64,7 +99,7 @@ class _AddMistakeScreenState extends ConsumerState<AddMistakeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('添加易错点'),
+        title: Text(_isEditing ? '编辑易错点' : '添加易错点'),
         actions: [
           TextButton(
             onPressed: _isSaving ? null : _save,
@@ -78,7 +113,9 @@ class _AddMistakeScreenState extends ConsumerState<AddMistakeScreen> {
           ),
         ],
       ),
-      body: Form(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : Form(
         key: _formKey,
         child: ListView(
           padding: const EdgeInsets.all(16),
@@ -358,49 +395,91 @@ class _AddMistakeScreenState extends ConsumerState<AddMistakeScreen> {
     setState(() => _isSaving = true);
 
     try {
-      // 构建标签 JSON
+      // 构建标签 JSON（使用 jsonEncode 避免特殊字符问题）
       final tags = _tagsController.text
           .split(',')
           .map((e) => e.trim())
           .where((e) => e.isNotEmpty)
           .toList();
-      final tagsJson = tags.isNotEmpty ? '["${tags.join('","')}"]' : '';
+      final tagsJson = tags.isNotEmpty ? jsonEncode(tags) : '';
 
-      // 保存易错点
-      final mistakeId = await DatabaseService.addMistake(
-        title: _titleController.text,
-        description: _descriptionController.text,
-        subjectId: _selectedSubjectId!,
-        chapter: _chapterController.text,
-        tags: tagsJson,
-        difficultyLevel: _difficultyLevel,
-      );
-
-      // 保存图片
-      for (int i = 0; i < _imagePaths.length; i++) {
-        await DatabaseService.addMistakeImage(mistakeId, _imagePaths[i], i);
-      }
-
-      // 设置复习提醒
-      if (_enableReview) {
-        final nextReviewDate = SpacedRepetition.getNextReviewDate(
-          lastReviewDate: DateTime.now(),
-          reviewCount: 0,
+      if (_isEditing) {
+        // 编辑模式：更新已有易错点
+        await DatabaseService.updateMistake(
+          widget.editId!,
+          title: _titleController.text,
+          description: _descriptionController.text,
+          subjectId: _selectedSubjectId!,
+          chapter: _chapterController.text,
+          tags: tagsJson,
           difficultyLevel: _difficultyLevel,
         );
-        await DatabaseService.updateMistake(
-          mistakeId,
-          nextReviewDate: nextReviewDate,
+
+        // 删除旧图片，重新添加
+        for (final imgId in _existingImageIds) {
+          await DatabaseService.deleteMistakeImage(imgId);
+        }
+        for (int i = 0; i < _imagePaths.length; i++) {
+          await DatabaseService.addMistakeImage(widget.editId!, _imagePaths[i], i);
+        }
+
+        // 更新复习提醒
+        if (_enableReview) {
+          final nextReviewDate = SpacedRepetition.getNextReviewDate(
+            lastReviewDate: DateTime.now(),
+            reviewCount: 0,
+            difficultyLevel: _difficultyLevel,
+          );
+          await DatabaseService.updateMistake(
+            widget.editId!,
+            nextReviewDate: nextReviewDate,
+          );
+          final subject = _subjects.firstWhere((s) => s.id == _selectedSubjectId);
+          await NotificationService.scheduleReviewNotification(
+            mistakeId: widget.editId!,
+            title: _titleController.text,
+            subjectName: subject.name,
+            scheduledDate: nextReviewDate,
+          );
+        } else {
+          await DatabaseService.updateMistake(widget.editId!, nextReviewDate: null);
+          await NotificationService.cancelNotification(widget.editId!);
+        }
+      } else {
+        // 新建模式
+        final mistakeId = await DatabaseService.addMistake(
+          title: _titleController.text,
+          description: _descriptionController.text,
+          subjectId: _selectedSubjectId!,
+          chapter: _chapterController.text,
+          tags: tagsJson,
+          difficultyLevel: _difficultyLevel,
         );
 
-        // 获取科目名
-        final subject = _subjects.firstWhere((s) => s.id == _selectedSubjectId);
-        await NotificationService.scheduleReviewNotification(
-          mistakeId: mistakeId,
-          title: _titleController.text,
-          subjectName: subject.name,
-          scheduledDate: nextReviewDate,
-        );
+        // 保存图片
+        for (int i = 0; i < _imagePaths.length; i++) {
+          await DatabaseService.addMistakeImage(mistakeId, _imagePaths[i], i);
+        }
+
+        // 设置复习提醒
+        if (_enableReview) {
+          final nextReviewDate = SpacedRepetition.getNextReviewDate(
+            lastReviewDate: DateTime.now(),
+            reviewCount: 0,
+            difficultyLevel: _difficultyLevel,
+          );
+          await DatabaseService.updateMistake(
+            mistakeId,
+            nextReviewDate: nextReviewDate,
+          );
+          final subject = _subjects.firstWhere((s) => s.id == _selectedSubjectId);
+          await NotificationService.scheduleReviewNotification(
+            mistakeId: mistakeId,
+            title: _titleController.text,
+            subjectName: subject.name,
+            scheduledDate: nextReviewDate,
+          );
+        }
       }
 
       if (mounted) {

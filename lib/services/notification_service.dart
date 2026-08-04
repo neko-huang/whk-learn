@@ -50,7 +50,7 @@ class NotificationService {
             sound: true,
           );
 
-      return (androidGranted ?? true) || (iosGranted ?? true);
+      return (androidGranted ?? false) || (iosGranted ?? false);
     } catch (e) {
       debugPrint('请求通知权限失败: $e');
       return false;
@@ -203,6 +203,15 @@ class NotificationService {
         int daysUntil = weekday - todayWeekday;
         if (daysUntil < 0) daysUntil += 7;
         eventDate = DateTime(now.year, now.month, now.day + daysUntil);
+      } else if (event.eventType == 'date_range') {
+        // 时间段日程：如果当前日期在范围内，使用当天提醒时间
+        final rangeStart = event.rangeStartDate;
+        final rangeEnd = event.rangeEndDate;
+        if (rangeStart == null || rangeEnd == null) continue;
+        final today = DateTime(now.year, now.month, now.day);
+        if (today.isBefore(rangeStart) || today.isAfter(rangeEnd)) continue;
+        eventDate = today;
+        timeStr = event.repeatStartTime;
       }
 
       if (eventDate == null || timeStr == null || timeStr.isEmpty) continue;

@@ -5,9 +5,20 @@ import '../../models/database.dart';
 import '../../models/mistake.dart';
 import '../../services/database_service.dart';
 
-/// 学习计划数据 Provider
+/// 学习计划数据 Provider（含动态完成时长）
 final plansDataProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
-  return await DatabaseService.getStudyPlansWithSubject();
+  final plans = await DatabaseService.getStudyPlansWithSubject();
+  // 动态计算每个计划的已完成分钟数
+  final result = <Map<String, dynamic>>[];
+  for (final item in plans) {
+    final plan = item['plan'] as StudyPlan;
+    final completedMinutes = await DatabaseService.getPlanCompletedMinutes(plan.id);
+    result.add({
+      ...item,
+      'dynamicCompletedMinutes': completedMinutes,
+    });
+  }
+  return result;
 });
 
 /// 学习计划页面
@@ -137,10 +148,12 @@ class _PlansScreenState extends ConsumerState<PlansScreen> with SingleTickerProv
 
   /// 计划卡片
   Widget _buildPlanCard(BuildContext context, StudyPlan plan, Subject? subject) {
+    // 使用动态计算数据
+    final item = plansDataProvider.value?.where((e) => (e['plan'] as StudyPlan).id == plan.id).firstOrNull;
+    final completedMinutes = (item?['dynamicCompletedMinutes'] as int?) ?? plan.completedHours;
     final progress = plan.targetHours > 0
-        ? (plan.completedHours / (plan.targetHours * 60)).clamp(0.0, 1.0)
+        ? (completedMinutes / (plan.targetHours * 60)).clamp(0.0, 1.0)
         : 0.0;
-    final completedMinutes = plan.completedHours; // 数据库中存储的是分钟
     final targetMinutes = plan.targetHours * 60;
     final dateFormat = DateFormat('MM/dd');
 
@@ -397,6 +410,62 @@ class _PlanDetailSheet extends ConsumerWidget {
                       },
                     ),
                   ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: [
+                      if (plan.status == 'pending')
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () async {
+                              await DatabaseService.updateStudyPlan(plan.id, status: 'in_progress');
+                              if (context.mounted) Navigator.pop(context);
+                              ref.invalidate(plansDataProvider);
+                            },
+                            icon: const Icon(Icons.play_arrow),
+                            label: const Text('开始执行'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.blue,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ),
+                      if (plan.status == 'in_progress')
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () async {
+                              await DatabaseService.updateStudyPlan(plan.id, status: 'completed');
+                              if (context.mounted) Navigator.pop(context);
+                              ref.invalidate(plansDataProvider);
+                            },
+                            icon: const Icon(Icons.check_circle),
+                            label: const Text('标记完成'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.green,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ),
+                      if (plan.status == 'in_progress' || plan.status == 'pending')
+                        const SizedBox(width: 12),
+                      if (plan.status == 'completed')
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () async {
+                              await DatabaseService.updateStudyPlan(plan.id, status: 'in_progress');
+                              if (context.mounted) Navigator.pop(context);
+                              ref.invalidate(plansDataProvider);
+                            },
+                            icon: const Icon(Icons.refresh),
+                            label: const Text('重新开始'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: Colors.orange,
+                              foregroundColor: Colors.white,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
               ],
             ),
           );

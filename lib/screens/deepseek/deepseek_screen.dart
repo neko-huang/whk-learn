@@ -473,22 +473,37 @@ class _DeepSeekScreenState extends ConsumerState<DeepSeekScreen> {
   /// 预处理 DeepSeek 回复中的数学公式，使 Markdown 能正确显示
   /// 将 $$...$$ 替换为代码块，将 $...$ 替换为行内代码
   String _preprocessContent(String content) {
-    // 先处理 $$...$$（块级公式），替换为 fenced code block
+    // 先保存所有代码块，避免被后续正则破坏
+    final codeBlocks = <String>[];
     var result = content.replaceAllMapped(
+      RegExp(r'```[\s\S]*?```'),
+      (match) {
+        codeBlocks.add(match.group(0)!);
+        return '%%%CODEBLOCK${codeBlocks.length - 1}%%%';
+      },
+    );
+
+    // 处理 $$...$$（块级公式），替换为 fenced code block
+    result = result.replaceAllMapped(
       RegExp(r'\$\$(.+?)\$\$', dotAll: true),
       (match) => '```math\n${match.group(1)}\n```',
     );
+
     // 再处理 $...$（行内公式），替换为行内代码
-    // 注意：避免匹配到已被替换的 $$...$$
     result = result.replaceAllMapped(
       RegExp(r'(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)'),
       (match) {
-        // 确保不被 ``` 包裹的内容干扰
         final text = match.group(1)!;
         if (text.contains('\n')) return match.group(0)!;
-        return '`\$$text\$`';
+        return '`\$${text}\$`';
       },
     );
+
+    // 恢复代码块
+    for (int i = 0; i < codeBlocks.length; i++) {
+      result = result.replaceFirst('%%%CODEBLOCK$i%%%', codeBlocks[i]);
+    }
+
     return result;
   }
 

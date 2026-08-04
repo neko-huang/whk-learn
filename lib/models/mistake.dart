@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'database.dart';
 
@@ -30,10 +31,16 @@ class MistakeWithSubject {
   /// 标签列表
   List<String> get tagList {
     if (mistake.tags.isEmpty) return [];
-    // 简单解析 JSON 数组格式
-    final cleaned = mistake.tags.replaceAll('[', '').replaceAll(']', '').replaceAll('"', '');
-    if (cleaned.isEmpty) return [];
-    return cleaned.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    try {
+      final decoded = jsonDecode(mistake.tags);
+      if (decoded is List) return decoded.cast<String>();
+      return [];
+    } catch (_) {
+      // 兼容旧数据：手工拼接的 JSON 格式
+      final cleaned = mistake.tags.replaceAll('[', '').replaceAll(']', '').replaceAll('"', '');
+      if (cleaned.isEmpty) return [];
+      return cleaned.split(',').map((e) => e.trim()).where((e) => e.isNotEmpty).toList();
+    }
   }
 
   /// 是否需要复习

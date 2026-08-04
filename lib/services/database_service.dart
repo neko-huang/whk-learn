@@ -297,7 +297,9 @@ class DatabaseService {
     
     final subject = await (db.select(db.subjects)
       ..where((t) => t.id.equals(mistake.subjectId))
-    ).getSingle();
+    ).getSingleOrNull();
+    
+    if (subject == null) return null;
     
     final images = await (db.select(db.mistakeImages)
       ..where((t) => t.mistakeId.equals(mistake.id))

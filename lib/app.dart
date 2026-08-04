@@ -45,14 +45,13 @@ class MainScaffold extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final currentIndex = ref.watch(bottomNavIndexProvider);
+    final currentIndex = navigationShell.currentIndex;
 
     return Scaffold(
       body: navigationShell,
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: currentIndex,
         onTap: (index) {
-          ref.read(bottomNavIndexProvider.notifier).state = index;
           navigationShell.goBranch(
             index,
             initialLocation: index == currentIndex,
@@ -87,8 +86,10 @@ final _shellRoutes = <RouteBase>[
         path: 'add',
         builder: (context, state) {
           final subjectId = state.uri.queryParameters['subjectId'];
+          final editId = state.uri.queryParameters['editId'];
           return AddMistakeScreen(
             initialSubjectId: subjectId != null ? int.tryParse(subjectId) : null,
+            editId: editId != null ? int.tryParse(editId) : null,
           );
         },
       ),
