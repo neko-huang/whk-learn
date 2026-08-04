@@ -522,12 +522,6 @@ class _DeepSeekScreenState extends ConsumerState<DeepSeekScreen> {
             : (isDark ? Colors.grey.shade700 : Colors.grey.shade200),
         borderRadius: BorderRadius.circular(8),
       ),
-      codeblockTextStyle: TextStyle(
-        fontSize: 13,
-        height: 1.3,
-        color: textColor,
-        fontFamily: 'monospace',
-      ),
       listBullet: TextStyle(fontSize: 15, height: 1.4, color: textColor),
       strong: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, height: 1.4, color: textColor),
       em: TextStyle(fontSize: 15, fontStyle: FontStyle.italic, height: 1.4, color: textColor),
@@ -538,12 +532,6 @@ class _DeepSeekScreenState extends ConsumerState<DeepSeekScreen> {
             width: 3,
           ),
         ),
-      ),
-      blockquoteTextStyle: TextStyle(
-        fontSize: 15,
-        height: 1.4,
-        color: isUser ? Colors.white.withOpacity(0.8) : Colors.grey.shade700,
-        fontStyle: FontStyle.italic,
       ),
       horizontalRuleDecoration: BoxDecoration(
         border: Border(
