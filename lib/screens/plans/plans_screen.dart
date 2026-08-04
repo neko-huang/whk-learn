@@ -149,7 +149,7 @@ class _PlansScreenState extends ConsumerState<PlansScreen> with SingleTickerProv
   /// 计划卡片
   Widget _buildPlanCard(BuildContext context, StudyPlan plan, Subject? subject) {
     // 使用动态计算数据
-    final item = plansDataProvider.value?.where((e) => (e['plan'] as StudyPlan).id == plan.id).firstOrNull;
+    final item = ref.read(plansDataProvider).value?.where((e) => (e['plan'] as StudyPlan).id == plan.id).firstOrNull;
     final completedMinutes = (item?['dynamicCompletedMinutes'] as int?) ?? plan.completedHours;
     final progress = plan.targetHours > 0
         ? (completedMinutes / (plan.targetHours * 60)).clamp(0.0, 1.0)
