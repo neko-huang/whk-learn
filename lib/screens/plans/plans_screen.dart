@@ -465,8 +465,7 @@ class _PlanDetailSheet extends ConsumerWidget {
                     ],
                   ),
                 ],
-              ],
-            ),
+              ),
           );
         },
       ),
