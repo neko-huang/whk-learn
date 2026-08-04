@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../services/database_service.dart';
@@ -469,14 +470,101 @@ class _DeepSeekScreenState extends ConsumerState<DeepSeekScreen> {
     );
   }
 
+  /// 预处理 DeepSeek 回复中的数学公式，使 Markdown 能正确显示
+  /// 将 $$...$$ 替换为代码块，将 $...$ 替换为行内代码
+  String _preprocessContent(String content) {
+    // 先处理 $$...$$（块级公式），替换为 fenced code block
+    var result = content.replaceAllMapped(
+      RegExp(r'\$\$(.+?)\$\$', dotAll: true),
+      (match) => '```math\n${match.group(1)}\n```',
+    );
+    // 再处理 $...$（行内公式），替换为行内代码
+    // 注意：避免匹配到已被替换的 $$...$$
+    result = result.replaceAllMapped(
+      RegExp(r'(?<!\$)\$(?!\$)(.+?)(?<!\$)\$(?!\$)'),
+      (match) {
+        // 确保不被 ``` 包裹的内容干扰
+        final text = match.group(1)!;
+        if (text.contains('\n')) return match.group(0)!;
+        return '`\$$text\$`';
+      },
+    );
+    return result;
+  }
+
   Widget _buildBubble(_ChatMessage msg) {
     final isUser = msg.role == 'user';
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isUser ? Colors.white : null;
+    final bubbleWidth = MediaQuery.of(context).size.width * 0.78;
+
+    // 预处理：Markdown 渲染 + 数学公式转化为代码块
+    final displayContent = isUser ? msg.content : _preprocessContent(msg.content);
+
+    // 构建 Markdown 样式表
+    final mdStyle = MarkdownStyleSheet(
+      p: TextStyle(fontSize: 15, height: 1.4, color: textColor),
+      h1: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, height: 1.4, color: textColor),
+      h2: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, height: 1.4, color: textColor),
+      h3: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, height: 1.4, color: textColor),
+      code: TextStyle(
+        fontSize: 13,
+        height: 1.3,
+        backgroundColor: isUser
+            ? Colors.white.withOpacity(0.15)
+            : (isDark ? Colors.grey.shade700 : Colors.grey.shade200),
+        color: textColor,
+        fontFamily: 'monospace',
+      ),
+      codeblockDecoration: BoxDecoration(
+        color: isUser
+            ? Colors.white.withOpacity(0.1)
+            : (isDark ? Colors.grey.shade700 : Colors.grey.shade200),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      codeblockTextStyle: TextStyle(
+        fontSize: 13,
+        height: 1.3,
+        color: textColor,
+        fontFamily: 'monospace',
+      ),
+      listBullet: TextStyle(fontSize: 15, height: 1.4, color: textColor),
+      strong: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, height: 1.4, color: textColor),
+      em: TextStyle(fontSize: 15, fontStyle: FontStyle.italic, height: 1.4, color: textColor),
+      blockquoteDecoration: BoxDecoration(
+        border: Border(
+          left: BorderSide(
+            color: isUser ? Colors.white.withOpacity(0.5) : Colors.grey.shade400,
+            width: 3,
+          ),
+        ),
+      ),
+      blockquoteTextStyle: TextStyle(
+        fontSize: 15,
+        height: 1.4,
+        color: isUser ? Colors.white.withOpacity(0.8) : Colors.grey.shade700,
+        fontStyle: FontStyle.italic,
+      ),
+      horizontalRuleDecoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(
+            color: isUser ? Colors.white.withOpacity(0.3) : Colors.grey.shade300,
+            width: 1,
+          ),
+        ),
+      ),
+      del: TextStyle(fontSize: 15, height: 1.4, decoration: TextDecoration.lineThrough, color: textColor),
+      tableBody: TextStyle(fontSize: 13, height: 1.3, color: textColor),
+      tableHead: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, height: 1.3, color: textColor),
+      tableBorder: TableBorder.all(
+        color: isUser ? Colors.white.withOpacity(0.3) : Colors.grey.shade300,
+      ),
+    );
 
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
-        constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.78),
+        constraints: BoxConstraints(maxWidth: bubbleWidth),
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
         decoration: BoxDecoration(
@@ -494,15 +582,21 @@ class _DeepSeekScreenState extends ConsumerState<DeepSeekScreen> {
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
-            SelectableText(
-              msg.content,
-              style: TextStyle(
-                fontSize: 15,
-                height: 1.4,
-                color: isUser ? Colors.white : null,
-              ),
-            ),
+            // 用户消息用纯文本，助手消息用 Markdown 渲染
+            isUser
+                ? SelectableText(
+                    displayContent,
+                    style: TextStyle(fontSize: 15, height: 1.4, color: Colors.white),
+                  )
+                : Markdown(
+                    data: displayContent,
+                    selectable: true,
+                    shrinkWrap: true,
+                    styleSheet: mdStyle,
+                    padding: EdgeInsets.zero,
+                  ),
             const SizedBox(height: 4),
             Text(
               '${msg.time.hour.toString().padLeft(2, '0')}:${msg.time.minute.toString().padLeft(2, '0')}',

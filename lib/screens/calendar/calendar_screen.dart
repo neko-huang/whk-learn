@@ -18,6 +18,13 @@ final calendarDateEventsProvider = FutureProvider.family<List<CalendarEvent>, Da
   },
 );
 
+/// 日历选中日期 Provider（完全替代 setState）
+final calendarSelectedDateProvider = StateProvider<DateTime>((ref) => DateTime.now());
+/// 日历聚焦月份 Provider
+final calendarFocusedMonthProvider = StateProvider<DateTime>(
+  (ref) => DateTime(DateTime.now().year, DateTime.now().month),
+);
+
 /// 日历页面（独立页面，从课程表分离）
 class CalendarScreen extends ConsumerStatefulWidget {
   const CalendarScreen({super.key});
@@ -27,15 +34,19 @@ class CalendarScreen extends ConsumerStatefulWidget {
 }
 
 class _CalendarScreenState extends ConsumerState<CalendarScreen> {
-  DateTime _focusedMonth = DateTime(DateTime.now().year, DateTime.now().month);
-  DateTime _selectedDate = DateTime.now();
-
   static const _weekdayLabels = ['一', '二', '三', '四', '五', '六', '日'];
+
+  /// 非 build 方法中获取当前值（不订阅，仅读当前值）
+  DateTime get _selectedDate => ref.read(calendarSelectedDateProvider);
+  DateTime get _focusedMonth => ref.read(calendarFocusedMonthProvider);
 
   @override
   Widget build(BuildContext context) {
-    final monthEvents = ref.watch(calendarMonthEventsProvider(_focusedMonth));
-    final dateEvents = ref.watch(calendarDateEventsProvider(_selectedDate));
+    // 在 build 中用 watch 订阅，驱动重建
+    final focusedMonth = ref.watch(calendarFocusedMonthProvider);
+    final selectedDate = ref.watch(calendarSelectedDateProvider);
+    final monthEvents = ref.watch(calendarMonthEventsProvider(focusedMonth));
+    final dateEvents = ref.watch(calendarDateEventsProvider(selectedDate));
 
     return Scaffold(
       appBar: AppBar(
@@ -45,16 +56,12 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         children: [
           _buildMonthHeader(),
           _buildWeekdayLabels(),
-          // 月历网格：使用 SizedBox 固定高度，避免 Expanded 约束冲突
           SizedBox(
-            key: ValueKey('grid_${_focusedMonth.millisecondsSinceEpoch}'),
             height: _calcGridHeight(),
             child: _buildMonthGrid(monthEvents),
           ),
           const Divider(height: 1),
-          // 事件标题行（固定高度，不参与 Expanded）
           _buildEventsHeader(),
-          // 事件列表（占据剩余空间，直接渲染 dateEvents.when 结果）
           Expanded(
             child: _buildEventsListContent(dateEvents),
           ),
@@ -78,6 +85,7 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
   }
 
   Widget _buildMonthHeader() {
+    final focusedMonth = _focusedMonth;
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       child: Row(
@@ -85,19 +93,21 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
         children: [
           IconButton(
             icon: const Icon(Icons.chevron_left),
-            onPressed: () => setState(() {
-              _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month - 1);
-            }),
+            onPressed: () {
+              ref.read(calendarFocusedMonthProvider.notifier).state =
+                  DateTime(focusedMonth.year, focusedMonth.month - 1);
+            },
           ),
           Text(
-            DateFormat('yyyy年M月').format(_focusedMonth),
+            DateFormat('yyyy年M月').format(focusedMonth),
             style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           IconButton(
             icon: const Icon(Icons.chevron_right),
-            onPressed: () => setState(() {
-              _focusedMonth = DateTime(_focusedMonth.year, _focusedMonth.month + 1);
-            }),
+            onPressed: () {
+              ref.read(calendarFocusedMonthProvider.notifier).state =
+                  DateTime(focusedMonth.year, focusedMonth.month + 1);
+            },
           ),
         ],
       ),
@@ -368,12 +378,9 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     return info;
   }
 
-  /// 点击某天时的处理，确保安全
+  /// 点击某天时的处理，通过 provider 更新
   void _onDayTap(DateTime date) {
-    if (!mounted) return;
-    setState(() {
-      _selectedDate = date;
-    });
+    ref.read(calendarSelectedDateProvider.notifier).state = date;
   }
 
   /// 事件列表标题行（固定高度）
