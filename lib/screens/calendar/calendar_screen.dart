@@ -52,9 +52,11 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
             child: _buildMonthGrid(monthEvents),
           ),
           const Divider(height: 1),
+          // 事件标题行（固定高度，不参与 Expanded）
+          _buildEventsHeader(),
+          // 事件列表（占据剩余空间，直接渲染 dateEvents.when 结果）
           Expanded(
-            key: ValueKey('events_${_selectedDate.millisecondsSinceEpoch}'),
-            child: _buildDateEventsList(dateEvents),
+            child: _buildEventsListContent(dateEvents),
           ),
         ],
       ),
@@ -374,85 +376,82 @@ class _CalendarScreenState extends ConsumerState<CalendarScreen> {
     });
   }
 
-  Widget _buildDateEventsList(AsyncValue<List<CalendarEvent>> dateEvents) {
+  /// 事件列表标题行（固定高度）
+  Widget _buildEventsHeader() {
     final isToday = _selectedDate.year == DateTime.now().year &&
         _selectedDate.month == DateTime.now().month &&
         _selectedDate.day == DateTime.now().day;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(
+            isToday
+                ? '今天 · ${DateFormat('M月d日').format(_selectedDate)}'
+                : DateFormat('yyyy年M月d日 EEEE', 'zh_CN').format(_selectedDate),
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+          ),
+          TextButton.icon(
+            onPressed: () => _showAddEventDialog(),
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('添加'),
+          ),
+        ],
+      ),
+    );
+  }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  /// 事件列表内容（不含 Expanded 包裹，直接渲染 dateEvents.when 结果）
+  Widget _buildEventsListContent(AsyncValue<List<CalendarEvent>> dateEvents) {
+    return dateEvents.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (e, _) => Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(
-                isToday
-                    ? '今天 · ${DateFormat('M月d日').format(_selectedDate)}'
-                    : DateFormat('yyyy年M月d日 EEEE', 'zh_CN').format(_selectedDate),
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-              ),
+              Icon(Icons.error_outline, size: 48, color: Colors.grey.shade300),
+              const SizedBox(height: 12),
+              Text('加载失败', style: TextStyle(color: Colors.grey, fontSize: 14)),
+              const SizedBox(height: 8),
               TextButton.icon(
-                onPressed: () => _showAddEventDialog(),
-                icon: const Icon(Icons.add, size: 18),
-                label: const Text('添加'),
+                onPressed: () {
+                  ref.invalidate(calendarDateEventsProvider(_selectedDate));
+                },
+                icon: const Icon(Icons.refresh, size: 18),
+                label: const Text('重试'),
               ),
             ],
           ),
         ),
-        Expanded(
-          child: dateEvents.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, _) => Center(
-              child: Padding(
-                padding: const EdgeInsets.all(32),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.error_outline, size: 48, color: Colors.grey.shade300),
-                    const SizedBox(height: 12),
-                    Text('加载失败', style: TextStyle(color: Colors.grey, fontSize: 14)),
-                    const SizedBox(height: 8),
-                    TextButton.icon(
-                      onPressed: () {
-                        ref.invalidate(calendarDateEventsProvider(_selectedDate));
-                      },
-                      icon: const Icon(Icons.refresh, size: 18),
-                      label: const Text('重试'),
-                    ),
-                  ],
+      ),
+      data: (events) {
+        if (events.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.event_available, size: 48, color: Colors.grey.shade300),
+                const SizedBox(height: 12),
+                Text('当天没有事项', style: TextStyle(color: Colors.grey, fontSize: 14)),
+                const SizedBox(height: 8),
+                TextButton.icon(
+                  onPressed: () => _showAddEventDialog(),
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('添加事项'),
                 ),
-              ),
+              ],
             ),
-            data: (events) {
-              if (events.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.event_available, size: 48, color: Colors.grey.shade300),
-                      const SizedBox(height: 12),
-                      Text('当天没有事项', style: TextStyle(color: Colors.grey, fontSize: 14)),
-                      const SizedBox(height: 8),
-                      TextButton.icon(
-                        onPressed: () => _showAddEventDialog(),
-                        icon: const Icon(Icons.add, size: 18),
-                        label: const Text('添加事项'),
-                      ),
-                    ],
-                  ),
-                );
-              }
-              return ListView.builder(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                itemCount: events.length,
-                itemBuilder: (context, index) => _buildEventCard(events[index]),
-              );
-            },
-          ),
-        ),
-      ],
+          );
+        }
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          itemCount: events.length,
+          itemBuilder: (context, index) => _buildEventCard(events[index]),
+        );
+      },
     );
   }
 
