@@ -1,0 +1,23 @@
+# 敏感信息
+SECRET.md
+
+# 系统目录
+.skills/
+.gh/
+.local/
+.tmp/
+.DS_Store
+Thumbs.db
+
+# 已有独立仓库
+study_helper/
+
+# 临时文件
+*.log
+*.tmp
+
+# 构建产物
+imgs/release_temp/
+
+# 软链接（已复制到 agent_config/）
+基础设定

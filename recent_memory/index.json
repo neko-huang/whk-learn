@@ -1,0 +1,62 @@
+[
+  {
+    "file_name": "project/whk-learn_development.md",
+    "category": "project",
+    "summary": "Flutter学习辅助App whk-learn项目开发记录、进度、仓库信息",
+    "tags": ["Flutter", "学习工具", "移动端开发", "高中生学习", "易错点管理"],
+    "importance": 4,
+    "created_at": "2026-08-01T02:00:00Z",
+    "updated_at": "2026-08-02T00:04:00Z",
+    "expires_at": null
+  },
+  {
+    "file_name": "project/whk-learn_v2_function_expansion.md",
+    "category": "project",
+    "summary": "whk-learn Flutter项目v2版本三大功能模块（课程表、学习计划、番茄钟+学习统计联动）完整实现详情",
+    "tags": ["Flutter", "学习工具", "移动端开发", "whk-learn", "功能扩展"],
+    "importance": 4,
+    "created_at": "2026-08-02T00:00:00Z",
+    "updated_at": "2026-08-02T00:00:00Z",
+    "expires_at": null
+  },
+  {
+    "file_name": "project/whk-learn_schedule_calendar_implementation_20260802.md",
+    "category": "project",
+    "summary": "whk-learn项目完成理想时间表按日独立、实际时间表全编辑、日历带提醒三大功能改造，未引入新依赖",
+    "tags": ["Flutter", "学习工具", "日程模块", "日历功能", "whk-learn", "drift", "本地通知"],
+    "importance": 4,
+    "created_at": "2026-08-02T00:00:00Z",
+    "updated_at": "2026-08-02T00:00:00Z",
+    "expires_at": null
+  },
+  {
+    "file_name": "project/study_helper_android_build_fix_20260801.md",
+    "category": "project",
+    "summary": "study_helper Flutter项目手动补全完整Android Gradle构建配置，解决不支持的Gradle项目报错，待用户本地验证apk构建",
+    "tags": ["Flutter", "study_helper", "Android构建", "Gradle配置", "移动端开发"],
+    "importance": 4,
+    "created_at": "2026-08-01T03:11:34Z",
+    "updated_at": "2026-08-02T03:11:34Z",
+    "expires_at": null
+  },
+  {
+    "file_name": "project/study_helper_two_new_modules_20260802.md",
+    "category": "project",
+    "summary": "study_helper Flutter项目完成每日时间安排+专注模式两大功能全量开发，全程未引入新依赖，待执行build_runner生成drift数据库代码",
+    "tags": ["Flutter", "study_helper", "功能开发", "日程模块", "专注模式", "drift", "学习工具"],
+    "importance": 4,
+    "created_at": "2026-08-02T00:00:00Z",
+    "updated_at": "2026-08-02T00:00:00Z",
+    "expires_at": null
+  },
+  {
+    "file_name": "project/study_helper_flutter_20260802_refactor.md",
+    "category": "project",
+    "summary": "study_helper Flutter项目完成4项核心改造：理想日程一键迁移到实际、日历独立出课程表、修复日历灰屏Bug、新增跨天时间段日程date_range类型支持",
+    "tags": ["Flutter", "study_helper", "Riverpod", "drift", "go_router", "日程模块改造"],
+    "importance": 4,
+    "created_at": "2026-08-03T00:00:00Z",
+    "updated_at": "2026-08-03T00:00:00Z",
+    "expires_at": "2026-11-03T00:00:00Z"
+  }
+]
